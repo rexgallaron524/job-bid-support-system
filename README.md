@@ -7,9 +7,12 @@ Private job application tracking for your own Windows 11 VPS. This version uses 
 See the [detailed functionality guide](docs/FUNCTIONALITIES.md) and [verification report](docs/VERIFICATION.md). For GitHub/VPS transfer and updates, use [GITHUB_VPS_SETUP.md](GITHUB_VPS_SETUP.md).
 
 - Job URLs with duplicate checks per user and company suggestions.
+- All applications pagination with 10, 20, or 50 rows per page; the choice is saved to your account.
+- A detailed **My profile** page for manually entering your LinkedIn information and complete career history, with a `profile.txt` download for resume preparation.
+- Visible, searchable opportunity IDs that also appear in the exported folder name and inside `jd.txt`.
 - Job titles/descriptions, notes, deadlines, search, filters, status tracking, and tailored PDF/DOCX resumes.
 - Manual applications: open the posting, apply there, then mark the job as applied.
-- Export title + description to `D:\jobbid\{date}-{company}-{short-id}\jd.txt` through a browser folder picker.
+- Export title + description to `D:\jobbid\{date}-{company}-{short-id}\jd.txt`, remembering your chosen root folder in this browser.
 - Manager approval before new accounts can sign in.
 - Manager dashboard: read all application data and download resumes; approve/reject/suspend/delete users. Other users' jobs cannot be edited/deleted individually by the manager.
 - PostgreSQL stores accounts, session digests, job records, resume bytes, and signed-in theme preferences.
@@ -59,12 +62,32 @@ The bundled runtime is optional; an installed Node.js works normally.
 
 1. Create `D:\jobbid` on the Windows computer where your browser runs.
 2. Save/open a job, then click **Export JD to folder**.
-3. Select **D:\jobbid** in the directory picker. The app creates a subfolder and writes UTF-8 `jd.txt`, including the title and description.
+3. On your first export, select **D:\jobbid** in the directory picker and allow access. The app creates a subfolder and writes UTF-8 `jd.txt`, including the title and description.
 4. Example: `D:\jobbid\2026-10-21-Acme-a1b2c3d4\jd.txt`.
 
 The date is the job's UTC saved date; the short ID is stable. Invalid Windows filename characters in company names are replaced. Re-exporting the same job/company replaces its `jd.txt`. Changing the company changes the folder name. An export is a local copy; deleting the account does not remove it.
 
-The browser needs Edge/Chrome, a secure context (HTTPS or localhost), and your folder permission. It cannot silently select an arbitrary drive. The selected folder is on the **browser's computer**, even when the website runs on a remote VPS. No job text is sent to Codex automatically.
+The same eight-character **Opportunity ID** is visible in the list and job details, can be copied or searched, and appears inside `jd.txt`. Existing IDs and export folder names are preserved.
+
+Future exports reuse the selected folder, including after refreshing the page. Use **Change export folder** to select a different root; this changes the destination for future exports and does not move existing files. Your browser may ask you to renew permission. Cancelling a folder change keeps the previous selection.
+
+The folder handle is remembered in IndexedDB on this browser, separately for each account. Changing browsers, devices, website origins, or clearing site data requires selecting the folder again. If browser storage is unavailable, the export can still work, but the selection may not be remembered. The app cannot inspect the absolute drive path, so select **D:\jobbid itself**, not a job subfolder.
+
+The browser needs Edge/Chrome, a secure context (HTTPS or localhost), and your folder permission. It cannot silently select an arbitrary drive. The selected folder is on the **browser's computer**, even when the website runs on a remote VPS. No job text is sent to Codex automatically. Export-folder access needs no additional environment settings.
+
+## Your master career profile
+
+Open **My profile** from the navigation. Manually enter your LinkedIn information into contact/headline, summary, work experience, education, skills, projects, certifications/courses, languages, awards/publications, volunteering, career preferences, and additional-information sections. Experience and other career sections accept detailed text so you can keep your full history, dates, links, and accomplishments in one place.
+
+Click **Save profile** to store it in PostgreSQL. The app warns before leaving with unsaved edits and rejects a save from an older tab when a newer version already exists. The manager can read profiles but cannot edit another user's profile. Deleting an account also deletes its stored master profile.
+
+After saving, **Download profile TXT** downloads `profile.txt` through your browser's usual download flow. Use it together with an opportunity's `jd.txt` in your local Codex workspace, then upload the finished PDF/DOCX resume to that opportunity. The app does not import LinkedIn automatically or generate a resume.
+
+## Updating an existing production installation
+
+This release adds `db/migrations/002_profiles_and_page_size.sql`, which creates master-profile storage and the saved page-size preference. It preserves existing users, jobs, resumes, sessions, and opportunity IDs. **Run `npm run db:migrate` before starting the updated application.** Keep your existing `.env` and database; do not initialize a fresh database or recreate the manager account.
+
+Back up PostgreSQL, stop your app service, pull the reviewed changes, run `npm ci`, `npm run db:migrate`, and `npm run build`, then restart your normal service after all commands succeed. Docker Compose applies migrations at app startup. See [the VPS update guide](GITHUB_VPS_SETUP.md) for the full workflow. The export-folder update alone required no migration; the profile and pagination update does.
 
 ## Accounts and permissions
 

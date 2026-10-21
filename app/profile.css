@@ -1,0 +1,22 @@
+.master-profile{display:grid;gap:22px;max-width:1100px;min-width:0}
+.profile-intro{display:flex;align-items:flex-start;gap:18px;padding:25px;min-width:0}
+.profile-intro>div{flex:1;min-width:0}.profile-intro h2{font-size:19px;line-height:1.4;font-weight:500}
+.profile-intro p,.profile-section p,.profile-workflow p{font-size:12px;line-height:1.8;color:var(--muted);margin-top:10px}
+.profile-intro small{display:block;color:var(--accent);font-size:11px;margin-top:14px}
+.profile-section-links{display:flex;gap:8px;flex-wrap:wrap}.profile-section-links a{border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--muted);font-size:11px;line-height:1.5}
+.profile-section-links a:hover,.profile-section-links a:focus-visible{color:var(--accent);border-color:var(--accent)}
+.profile-fields{display:grid;gap:22px;border:0;padding:0;margin:0;min-width:0}
+.profile-section,.profile-workflow{padding:26px;min-width:0;scroll-margin-top:90px}
+.profile-section header{margin-bottom:19px}.profile-section h2,.profile-workflow h2{font-size:16px;font-weight:500;line-height:1.5}
+.profile-section .field-label{margin-bottom:0}.profile-section .form-grid{row-gap:18px}
+.profile-section textarea{resize:vertical;min-height:140px;line-height:1.8}
+.profile-save-bar{position:sticky;bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 22px;box-shadow:var(--shadow);z-index:5}
+.profile-save-bar strong,.profile-save-bar small{display:block;line-height:1.6}.profile-save-bar strong{font-size:12px;font-weight:500}
+.profile-save-bar small{font-size:10px;color:var(--muted);margin-top:5px}.profile-save-bar>div{min-width:0}.profile-save-bar .btn{flex-shrink:0}
+.profile-save-message{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green)}
+.profile-job-link{margin-top:14px}.manager-profile{padding:20px 25px;border-top:1px solid var(--line)}.manager-profile summary{cursor:pointer;font-size:13px;color:var(--accent)}.manager-profile p{margin-top:16px}
+.opportunity-id{display:block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:10px;color:var(--accent);letter-spacing:.4px;margin-top:5px;overflow-wrap:anywhere}
+.detail-meta .opportunity-id{margin:0;color:var(--accent)!important}.table-footer{flex-wrap:wrap;gap:12px}.table-footer>div{flex-wrap:wrap;justify-content:flex-end}
+.page-size-control{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:10px}.page-size-control select{font-size:11px;padding:6px 8px;min-width:58px}
+@media(max-width:800px){.profile-intro{flex-wrap:wrap}.profile-intro>.btn{margin-left:0}.profile-intro>div{flex-basis:calc(100% - 60px)}}
+@media(max-width:640px){.profile-intro,.profile-section,.profile-workflow{padding:20px}.profile-intro h2{font-size:17px}.profile-intro p,.profile-section p,.profile-workflow p{font-size:11px}.profile-section .form-grid{grid-template-columns:1fr}.profile-section-links a{font-size:10px}.profile-save-bar{padding:14px;bottom:10px;gap:12px}.profile-save-bar small{font-size:9px}.profile-save-bar .btn{font-size:11px;padding:9px}.opportunity-id{font-size:9px}.page-size-control{font-size:9px}.table-footer>div{width:100%;justify-content:space-between}.page-size-control select{font-size:10px}}

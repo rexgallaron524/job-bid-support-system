@@ -14,6 +14,10 @@ test('company names cannot escape or create invalid Windows paths', () => {
   assert.throws(() => exportFolder({ ...job, shortId: '../../other' }));
 });
 test('text exports preserve the title and Unicode description using Windows newlines', () => {
-  assert.equal(exportText(job), 'Job title: Engineer\r\n\r\nJob description:\r\nFirst line\r\n第二行\r\n');
+  assert.equal(exportText(job), 'Opportunity ID: a1b2\r\n\r\nJob title: Engineer\r\n\r\nJob description:\r\nFirst line\r\n第二行\r\n');
+});
+test('the ID inside the description matches its stable export folder', () => {
+  assert.ok(exportFolder(job).endsWith('-' + job.shortId));
+  assert.ok(exportText(job).startsWith('Opportunity ID: ' + job.shortId + '\r\n'));
 });
 

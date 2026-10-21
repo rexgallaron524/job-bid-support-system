@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import pg from 'pg';
+import { EMPTY_PROFILE } from '../lib/profile.ts';
 
 const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:3100';
 const connectionString = process.env.TEST_DATABASE_URL;
@@ -60,6 +61,40 @@ try {
   await call('/api/manager/users/' + otherId, { cookie: user, method: 'DELETE', body: { confirmationEmail: otherEmail }, expected: 403 });
   await call('/api/preferences', { cookie: user, method: 'PATCH', body: { theme: 'light' } });
   assert.equal((await pool.query('SELECT theme FROM users WHERE id=$1', [userId])).rows[0].theme, 'light');
+  await call('/api/preferences', { cookie: user, method: 'PATCH', body: { applicationPageSize: 20 } });
+  assert.deepEqual((await pool.query('SELECT theme, application_page_size FROM users WHERE id=$1', [userId])).rows[0], { theme: 'light', application_page_size: 20 });
+  await call('/api/preferences', { cookie: user, method: 'PATCH', body: { applicationPageSize: 15 }, expected: 400 });
+  await call('/api/preferences', { cookie: user, method: 'PATCH', body: {}, expected: 400 });
+  await call('/api/preferences', { cookie: user, method: 'PATCH', body: { applicationPageSize: 50, userId: otherId }, expected: 400 });
+  await call('/api/profile', { expected: 401 });
+  const profile = { ...EMPTY_PROFILE, fullName: 'Test Career Profile', linkedInUrl: 'https://www.linkedin.com/in/example', experience: 'Engineer at Acme\n成果: 日本語', skills: 'TypeScript, PostgreSQL' };
+  const profileBody = { profile, revision: 0 };
+  await call('/api/profile', { method: 'PUT', body: profileBody, expected: 401 });
+  assert.equal((await call('/api/profile', { cookie: user })).data.revision, 0);
+  await call('/api/profile', { cookie: user, method: 'PUT', body: { ...profileBody, userId: otherId }, expected: 400 });
+  await call('/api/profile', { cookie: user, method: 'PUT', body: { ...profileBody, profile: { ...profile, linkedInUrl: 'javascript:alert(1)' } }, expected: 400 });
+  await call('/api/profile', { cookie: user, method: 'PUT', body: { ...profileBody, profile: { ...profile, experience: 'x'.repeat(30001) } }, expected: 400 });
+  await call('/api/profile', { cookie: user, method: 'PUT', body: profileBody, origin: 'https://evil.example', expected: 403 });
+  await call('/api/profile', { cookie: user, method: 'PUT', body: profileBody, origin: null, expected: 403 });
+  const savedProfile = (await call('/api/profile', { cookie: user, method: 'PUT', body: profileBody })).data;
+  assert.equal(savedProfile.revision, 1);
+  assert.deepEqual(savedProfile.profile, profile);
+  assert.deepEqual((await call('/api/profile', { cookie: user })).data, savedProfile);
+  assert.equal((await call('/api/profile?userId=' + userId, { cookie: other })).data.revision, 0);
+  assert.equal((await call('/api/profile', { cookie: manager })).data.revision, 0);
+  assert.deepEqual((await call('/api/manager/profiles/' + userId, { cookie: manager })).data, savedProfile);
+  await call('/api/manager/profiles/' + userId, { cookie: other, expected: 403 });
+  await call('/api/manager/profiles/' + userId, { expected: 401 });
+  await call('/api/manager/profiles/' + userId, { cookie: manager, method: 'PUT', body: profileBody, expected: 405 });
+  const updates = await Promise.all(['First writer', 'Second writer'].map(summary => fetch(base + '/api/profile', {
+    method: 'PUT', headers: { Cookie: user, Origin: base, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ revision: 1, profile: { ...profile, summary } }), signal: AbortSignal.timeout(15000),
+  })));
+  assert.deepEqual(updates.map(result => result.status).sort(), [200, 409]); checks += 2;
+  const latestProfile = (await call('/api/profile', { cookie: user })).data;
+  assert.equal(latestProfile.revision, 2);
+  assert.equal(latestProfile.profile.experience, profile.experience);
+  await call('/api/profile', { cookie: user, method: 'PUT', body: profileBody, expected: 409 });
   const fields = { url: 'https://acme.example/jobs/' + suffix + '?utm_source=test', title: 'Engineer', company: 'Acme', description: 'Build useful things.\nUnicode: 日本語', notes: 'Recruiter notes' };
   const job = (await call('/api/jobs', { cookie: user, method: 'POST', body: fields, expected: 201 })).data;
   assert.match(job.shortId, /^[0-9a-f]{8}$/);
@@ -86,6 +121,8 @@ try {
   const applied = (await call(endpoint, { cookie: user, method: 'PATCH', body: { action: 'setStatus', status: 'Applied' } })).data;
   const interview = (await call(endpoint, { cookie: user, method: 'PATCH', body: { action: 'setStatus', status: 'Interview' } })).data;
   assert.ok(applied.appliedAt); assert.equal(applied.appliedAt, interview.appliedAt);
+  assert.equal(interview.shortId, job.shortId, 'Opportunity IDs must survive status changes');
+  await call(endpoint, { cookie: user, method: 'PATCH', body: { ...fields, shortId: 'newid123' }, expected: 400 });
   await call(endpoint, { cookie: user, method: 'PATCH', body: { action: 'setStatus', status: 'Saved' }, expected: 400 });
   const undone = (await call(endpoint, { cookie: user, method: 'PATCH', body: { action: 'undoApplied' } })).data;
   assert.equal(undone.appliedAt, null);
@@ -101,16 +138,17 @@ try {
   await call('/api/manager/users/' + managerId, { cookie: manager, method: 'DELETE', body: { confirmationEmail: managerEmail }, expected: 403 });
   await call('/api/manager/users/' + userId, { cookie: manager, method: 'DELETE', body: { confirmationEmail: 'wrong@example.test' }, expected: 400 });
   await call('/api/manager/users/' + userId, { cookie: manager, method: 'DELETE', body: { confirmationEmail: email } });
-  for (const [table, column, id] of [['users','id',userId],['jobs','user_id',userId],['resumes','job_id',job.id],['sessions','user_id',userId]]) {
+  for (const [table, column, id] of [['users','id',userId],['jobs','user_id',userId],['resumes','job_id',job.id],['sessions','user_id',userId],['profiles','user_id',userId]]) {
     assert.equal((await pool.query('SELECT count(*)::int AS count FROM ' + table + ' WHERE ' + column + '=$1', [id])).rows[0].count, 0);
   }
   await call('/api/jobs', { cookie: userAgain, expected: 401 });
   await call('/api/manager/jobs/' + job.id + '/resume', { cookie: manager, expected: 404 });
+  await call('/api/manager/profiles/' + userId, { cookie: manager, expected: 404 });
   await call('/api/auth/password', { cookie: other, method: 'POST', body: { currentPassword: password, newPassword: password + '-new' } });
   await call('/api/jobs', { cookie: other, expected: 401 });
   await call('/api/auth/logout', { cookie: manager, method: 'POST' });
   await call('/api/manager/users', { cookie: manager, expected: 401 });
-  console.log('Passed ' + checks + ' API checks against real PostgreSQL (approval, isolation, manager permissions, resumes, CSRF, sessions, cascade deletion).');
+  console.log('Passed ' + checks + ' API checks against real PostgreSQL (approval, isolation, manager permissions, profiles, concurrent saves, page sizes, stable IDs, resumes, CSRF, sessions, cascade deletion).');
 } finally {
   await pool.query('DELETE FROM users WHERE email = ANY($1::text[])', [[managerEmail, email, otherEmail]]);
   await pool.end();

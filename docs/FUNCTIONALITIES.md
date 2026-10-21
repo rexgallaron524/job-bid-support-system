@@ -1,6 +1,6 @@
 # All in one place-job support — Version 2 functionality
 
-This describes the standalone PostgreSQL version in [jobbid/](../). It replaces the prototype's ChatGPT sign-in and D1/R2 storage. The new database starts empty; old records are not imported.
+This describes the standalone PostgreSQL version in [jobbid/](../). It replaces the prototype's ChatGPT sign-in and D1/R2 storage. Fresh installations start empty; upgrades apply incremental migrations to preserve existing production records.
 
 ## 1. Accounts, privacy, and approvals
 
@@ -8,7 +8,7 @@ Sign in using your own email and password. New users request an account with a d
 
 New accounts are **pending**. The manager approves or rejects them. Pending, rejected, and suspended users cannot access a workspace. There is no automatic email verification or email notification in this release; applicants should use an address they control.
 
-Ordinary users can access only their own jobs and resumes. Duplicate checks are also per user. The manager can read all users' application records, descriptions, notes, and resume files. This visibility is disclosed on signup and in Settings.
+Ordinary users can access only their own master profile, jobs, and resumes. Duplicate checks are also per user. The manager can read all users' profiles, application records, descriptions, notes, and resume files. This visibility is disclosed on signup, in Settings, and on the profile page.
 
 Passwords are salted and hashed with scrypt. A random session token is stored in an HttpOnly, SameSite cookie; the database stores its SHA-256 digest. Production cookies require HTTPS. Sessions expire after 12 hours. Password changes, password resets, and manager account-status changes revoke affected sessions. Login/signup attempts have persistent database-backed rate limits.
 
@@ -46,6 +46,8 @@ Optional: location, work arrangement, salary text, deadline, job description, pe
 | Deadline | Valid calendar date |
 
 A complete JSON request also has a 200 KB size limit. Editing details preserves the job's application state/date. Jobs have a UUID internally and a stable, eight-character short ID for display and exports.
+
+The **Opportunity ID** appears in application rows, details, deadlines, resume cards, and manager views. It can be copied from job details and searched in the application list. PostgreSQL enforces global uniqueness. The ID cannot be changed through job editing; the exact same ID appears in the export folder name and inside `jd.txt`. Existing opportunities keep their IDs.
 
 You can delete your own job after confirmation. Its attached resume is deleted from PostgreSQL in the same cascading database operation.
 
@@ -87,7 +89,7 @@ The My resumes page lists jobs with documents and offers downloads and job links
 
 ## 8. Local TXT export
 
-In a job's details, click **Export JD to folder** and choose **D:\jobbid** in the browser folder picker.
+In a job's details, click **Export JD to folder** and choose **D:\jobbid** in the browser folder picker on your first export. The app remembers this root for your account in this browser, so subsequent exports reuse it even after a page refresh.
 
 Example:
 
@@ -98,6 +100,8 @@ D:\jobbid\2026-10-21-Acme-a1b2c3d4\jd.txt
 The subfolder uses the job's UTC saved date, sanitized company name, and stable short ID. Invalid Windows filename characters are replaced. The resulting UTF-8 text contains:
 
 ```text
+Opportunity ID: a1b2c3d4
+
 Job title: Platform Engineer
 
 Job description:
@@ -106,7 +110,9 @@ The saved description...
 
 Text uses Windows-style line endings. Re-exporting the same job/company replaces its `jd.txt`. Changing the company produces a different folder name; old local files are not cleaned up automatically.
 
-Export requires Edge/Chrome and HTTPS or localhost. The browser asks you to select a directory; it cannot silently write to an arbitrary drive. The selected directory belongs to the computer running the browser, even when the server is a remote VPS. Select D:\jobbid itself, rather than one of its existing job subfolders.
+Export requires Edge/Chrome and HTTPS or localhost. The browser asks you to select a directory initially and may ask you to renew write permission later. It cannot silently write to an arbitrary drive or confirm the absolute drive path. The selected directory belongs to the computer running the browser, even when the server is a remote VPS. Select D:\jobbid itself, rather than one of its existing job subfolders.
+
+Use **Change export folder** to choose a different root. Cancelling keeps the previous selection. Changing the root does not move existing exports. The folder handle is stored in browser IndexedDB, separately for each account; it is not a PostgreSQL record and does not sync across devices or browsers. Clearing site data or changing the website origin requires choosing the folder again. If the browser cannot store the handle, the app reports that the selection may need to be repeated.
 
 These are ordinary folders, not Git repositories or submodules. Exports are local copies for your own Codex workflow. The application does not launch Codex, generate resumes, or upload exported descriptions to an AI provider.
 
@@ -120,9 +126,9 @@ Overview shows:
 
 Clicking a statistic opens its corresponding set of records, including the combined sent/saved groups. This corrects the prototype's mismatch between some totals and their filters.
 
-Browse all applications; filter by status or work arrangement; search by title, company, location, or notes. Search does not inspect the description, original URL, salary, or resume contents.
+Browse all applications; filter by status or work arrangement; search by opportunity ID, title, company, location, or notes. Search does not inspect the description, original URL, salary, or resume contents.
 
-Sort newest first, company A–Z, or deadline first. Overview pages contain five jobs; the full application list contains ten per page. The app fetches the signed-in user's list and filters/pages it in the browser. It does not provide live synchronization between open tabs.
+Sort newest first, company A–Z, or deadline first. Overview pages contain five jobs. **All applications** offers **10, 20, or 50 rows per page**, previous/next controls, page count, and a visible record range. The selection is saved to the signed-in account in PostgreSQL and restored after refresh/sign-in. Changing the page size or filters returns to page one; an incomplete final page is handled automatically. The app fetches the signed-in user's list and filters/pages it in the browser. It does not provide live synchronization between open tabs.
 
 The journey chart summarizes current statuses. Help explains the manual workflow.
 
@@ -155,10 +161,12 @@ Managers can:
 - Open any user's current application list.
 - Read title, company, URL, status, dates, description, notes, work details, salary, and resume metadata.
 - Download the user's current resume.
+- Read the user's saved master profile through a read-only section.
 - Delete an ordinary account after typing its exact email.
 
 Managers cannot:
 - Edit another user's job fields or application status.
+- Edit another user's master profile.
 - Delete another user's individual job or attachment.
 - Promote an ordinary user to manager through the web API.
 - Delete/suspend manager accounts through the dashboard.
@@ -172,6 +180,7 @@ Confirmed account deletion is a PostgreSQL transaction with foreign-key cascades
 ```text
 User
 ├── Sessions
+├── Master profile
 └── Jobs
     └── Resume bytes
 ```
@@ -188,10 +197,13 @@ Local TXT exports and previously created database backups are outside the live c
 | Session token digests and expiry | PostgreSQL |
 | Jobs, descriptions, notes, status, dates | PostgreSQL |
 | Resume binary contents and metadata | PostgreSQL |
+| Master career profile and revision | PostgreSQL |
+| Application page-size preference | PostgreSQL |
 | Signed-in appearance preference | PostgreSQL; browser cache for initial render |
 | Temporary hashed authentication rate limits | PostgreSQL |
 | Authentication cookie | Browser; HttpOnly, Secure in production |
 | Exported jd.txt files | User-selected local Windows folder |
+| Downloaded profile.txt | Browser's usual download location |
 
 The application runs as a standard Node.js/Next.js server. Native Windows deployment and optional Docker Compose configuration are included, with Caddy for HTTPS. No domain registration or VPS publication happens automatically.
 
@@ -202,3 +214,19 @@ The new source has no ChatGPT login, Cloudflare D1/R2 binding, or Sites deployme
 No automatic job applications, AI generation, cross-board semantic deduplication, bulk import, full status-history audit, resume versioning, email delivery, MFA, or automatic account recovery is included.
 
 For setup/testing, see [jobbid/README.md](../README.md). For Windows hosting, HTTPS, database backup and service setup, see [WINDOWS_VPS_SETUP.md](../WINDOWS_VPS_SETUP.md). See [DEPLOYMENT.md](VERIFICATION.md) for the checks actually completed and deployment limits.
+
+## 16. My profile — master source for tailored resumes
+
+The **My profile** navigation page contains your full career record. Enter or copy your LinkedIn information manually; no LinkedIn connection, scraping, or automatic import is performed.
+
+Sections include full name, professional headline, location, resume contact email, phone, LinkedIn URL, portfolio/website, professional summary, work experience, education, skills, projects, certifications/courses, languages, awards/publications/achievements, volunteering/organizations, career preferences, and additional career information. Career sections support detailed text, multiple entries, dates, links, and achievements. Section links help navigate the page, and the filled-section count helps you see what you have entered.
+
+Use **Save profile** to store the complete profile in PostgreSQL. Contact details here do not change the account's sign-in email. Changes are explicit saves; the app warns before leaving with unsaved edits. Revision checks reject stale concurrent saves instead of overwriting a newer profile from another tab. A failed save leaves your draft on screen so you can copy or retry it.
+
+Saved profiles can be downloaded as UTF-8 **profile.txt** with Windows-style line endings. Save pending edits before downloading. The download includes every populated section, so review it before sharing. It uses the browser's standard download destination; the job-description export uses your remembered local root folder.
+
+To prepare a tailored resume: save/download the master profile, export the target opportunity's `jd.txt`, use both as source material in your local Codex workflow, and attach the finished PDF/DOCX to the opportunity. Automatic resume generation is not included.
+
+Ordinary users can read and update only their own profile. The manager can read profiles but cannot modify another user's profile through the manager API or dashboard. Deleting an account cascades to its profile as well as its application records. Local profile downloads and database backups remain outside that cascade.
+
+Upgrading an existing installation requires **002_profiles_and_page_size.sql**, applied with `npm run db:migrate` before restarting the updated app. This migration preserves existing records and IDs; it does not reset the production database.

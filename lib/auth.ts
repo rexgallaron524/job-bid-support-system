@@ -9,7 +9,7 @@ export const SESSION_SECONDS = 60 * 60 * 12;
 export async function currentUser() {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
-  const [row] = await getDb().select({ userId: users.id, name: users.name, email: users.email, role: users.role, theme: users.theme })
+  const [row] = await getDb().select({ userId: users.id, name: users.name, email: users.email, role: users.role, theme: users.theme, applicationPageSize: users.applicationPageSize })
     .from(sessions).innerJoin(users, eq(users.id, sessions.userId))
     .where(and(eq(sessions.tokenHash, tokenHash(token)), gt(sessions.expiresAt, new Date()), eq(users.status, "approved")));
   return row ?? null;

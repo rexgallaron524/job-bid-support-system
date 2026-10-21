@@ -1,4 +1,5 @@
-import { pgTable, text, integer, uniqueIndex, index, customType, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, uniqueIndex, index, customType, timestamp, jsonb } from "drizzle-orm/pg-core";
+import type { CareerProfile } from "@/lib/profile";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
 export const users = pgTable("users", {
@@ -6,6 +7,12 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(), role: text("role").notNull().default("user"),
   status: text("status").notNull().default("pending"), createdAt: text("created_at").notNull(),
   theme: text("theme").notNull().default("dark"),
+  applicationPageSize: integer("application_page_size").notNull().default(10),
+});
+export const profiles = pgTable("profiles", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  data: jsonb("data").$type<CareerProfile>().notNull(),
+  revision: integer("revision").notNull().default(1), updatedAt: text("updated_at").notNull(),
 });
 export const sessions = pgTable("sessions", {
   tokenHash: text("token_hash").primaryKey(), userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),

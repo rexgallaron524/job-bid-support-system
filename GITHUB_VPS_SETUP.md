@@ -87,6 +87,8 @@ npm run build
 
 Continue only when each command succeeds, then restart the application service. Plan a short maintenance window for this initial deployment model. Do not rerun `manager:create` on every update. This workflow does not automatically deploy on a GitHub push.
 
+The profile/pagination update includes **002_profiles_and_page_size.sql**. It adds master profiles and a page-size preference without replacing existing records or opportunity IDs. Run the migration before restarting the updated application; keep the existing `.env`, database, and manager account. Do not modify an already applied migration. Docker Compose's app startup runs the migration command automatically.
+
 ## What Git contains
 
 - Application code and configuration.

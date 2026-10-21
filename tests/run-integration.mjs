@@ -28,7 +28,7 @@ try {
   if (process.env.UI_ONLY !== "true") {
   const cli = spawn(process.execPath, ["tests/cli.mjs"], { stdio: "inherit", windowsHide: true });
   if (await new Promise(resolve => cli.once("exit", resolve)) !== 0) throw new Error("CLI checks failed.");
-  const child = spawn(process.execPath, ["tests/api.test.mjs"], { env: { ...process.env, TEST_BASE_URL: origin, TEST_MANAGER_PATH: "review-manager-qa" }, stdio: "inherit", windowsHide: true });
+  const child = spawn(process.execPath, ["--experimental-strip-types", "tests/api.test.mjs"], { env: { ...process.env, TEST_BASE_URL: origin, TEST_MANAGER_PATH: "review-manager-qa" }, stdio: "inherit", windowsHide: true });
   const exit = await new Promise(resolve => child.once("exit", resolve));
   if (exit !== 0) throw new Error("API tests failed. " + logs);
   }

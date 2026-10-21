@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./profile.css";
 
 export const metadata: Metadata = {
   title: "All in one place-job support",
