@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { jobs } from "@/db/schema";
+import { jobs, jobActivity } from "@/db/schema";
 import { normalizeJobUrl, STATUSES, transitionStatus } from "@/lib/domain";
 import { api, ApiError, canonicalHash, jobInput, json, jsonBody, ownerWhere, publicJob, userFor } from "@/lib/server";
 
@@ -19,6 +20,7 @@ export async function PATCH(request: Request, context: Context) {
       if (body?.action === "undoApplied") {
         z.object({ action: z.literal("undoApplied") }).strict().parse(body);
         changes = { status: "Saved", appliedAt: null };
+        await tx.delete(jobActivity).where(and(eq(jobActivity.jobId, id), eq(jobActivity.kind, "applied")));
       } else if (body?.action === "setStatus") {
         const input = z.object({ action: z.literal("setStatus"), status: z.enum(STATUSES) }).strict().parse(body);
         try { changes = transitionStatus(current, input.status, now); } catch (e) { throw new ApiError(400, (e as Error).message); }
@@ -27,6 +29,9 @@ export async function PATCH(request: Request, context: Context) {
         changes = { ...input, canonicalUrl: normalizeJobUrl(input.url), canonicalHash: canonicalHash(input.url) };
       }
       const [job] = await tx.update(jobs).set({ ...changes, updatedAt: now }).where(ownerWhere(user.userId, id)).returning();
+      if (!current.appliedAt && job.appliedAt) await tx.insert(jobActivity).values({ id: crypto.randomUUID(), jobId: id, kind: "applied", occurredAt: new Date(job.appliedAt) }).onConflictDoNothing();
+      const milestone = job.status === "Offer" ? "offer" : job.status === "Rejected" ? "rejected" : job.status === "Withdrawn" ? "withdrawn" : null;
+      if (milestone && current.status !== job.status) await tx.insert(jobActivity).values({ id: crypto.randomUUID(), jobId: id, kind: milestone, occurredAt: new Date(now) }).onConflictDoNothing();
       return job;
     });
     return json(publicJob(result));

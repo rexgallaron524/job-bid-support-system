@@ -1,5 +1,7 @@
 import { pgTable, text, integer, uniqueIndex, index, customType, timestamp, jsonb } from "drizzle-orm/pg-core";
 import type { CareerProfile } from "@/lib/profile";
+import type { ActivityKind } from "@/lib/activity";
+import { sql } from "drizzle-orm";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
 export const users = pgTable("users", {
@@ -45,6 +47,13 @@ export const jobs = pgTable("jobs", {
 }, (t) => [uniqueIndex("jobs_owner_url").on(t.userId, t.canonicalHash), index("jobs_owner_updated").on(t.userId, t.updatedAt)]);
 
 export type JobRecord = typeof jobs.$inferSelect;
+
+export const jobActivity = pgTable("job_activity", {
+  id: text("id").primaryKey(), jobId: text("job_id").notNull().references(() => jobs.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<ActivityKind>().notNull(), occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  label: text("label").notNull().default(""), notes: text("notes").notNull().default(""), source: text("source").notNull().default("recorded"),
+}, t => [index("job_activity_job_date").on(t.jobId, t.occurredAt), uniqueIndex("job_activity_milestone").on(t.jobId, t.kind).where(sql`${t.kind} <> 'interview_completed'`)]);
 
 export const resumes = pgTable("resumes", {
   jobId: text("job_id").primaryKey().references(() => jobs.id, { onDelete: "cascade" }), data: bytea("data").notNull(),

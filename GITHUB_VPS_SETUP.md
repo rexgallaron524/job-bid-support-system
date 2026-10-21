@@ -89,6 +89,8 @@ Continue only when each command succeeds, then restart the application service. 
 
 The profile/pagination update includes **002_profiles_and_page_size.sql**. It adds master profiles and a page-size preference without replacing existing records or opportunity IDs. Run the migration before restarting the updated application; keep the existing `.env`, database, and manager account. Do not modify an already applied migration. Docker Compose's app startup runs the migration command automatically.
 
+The progress dashboard adds **003_activity_dashboard.sql**. It creates activity storage and recovers existing saved/application dates without guessing historical interviews or outcome dates. The same migration command applies this file after any earlier pending migrations. Back up PostgreSQL before updating; no database reset or manager recreation is needed.
+
 ## What Git contains
 
 - Application code and configuration.

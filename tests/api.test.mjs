@@ -99,6 +99,58 @@ try {
   const job = (await call('/api/jobs', { cookie: user, method: 'POST', body: fields, expected: 201 })).data;
   assert.match(job.shortId, /^[0-9a-f]{8}$/);
   const endpoint = '/api/jobs/' + job.id;
+  const interviewsEndpoint = endpoint + '/interviews';
+  const historicalRange = 'from=2024-02-29&to=2024-03-01';
+  await call('/api/activity?' + historicalRange, { expected: 401 });
+  await call('/api/activity?from=invalid&to=2024-03-01', { cookie: user, expected: 400 });
+  await call('/api/activity?from=2024-03-01&to=2024-02-29', { cookie: user, expected: 400 });
+  await call('/api/activity?from=2000-01-01&to=2024-01-01', { cookie: user, expected: 400 });
+  await call('/api/activity?' + historicalRange + '&kind=bad', { cookie: user, expected: 400 });
+  await call(interviewsEndpoint, { cookie: other, expected: 404 });
+  await call(interviewsEndpoint, { cookie: manager, expected: 404 });
+  await call(interviewsEndpoint, { expected: 401 });
+  const interviewInput = { requestId: randomUUID(), label: 'Technical round', notes: 'Completed system design. 日本語', completedOn: '2024-02-29' };
+  const firstInterview = (await call(interviewsEndpoint, { cookie: user, method: 'POST', body: interviewInput, expected: 201 })).data;
+  await call(interviewsEndpoint, { cookie: user, method: 'POST', body: interviewInput });
+  await call(interviewsEndpoint, { cookie: user, method: 'POST', body: { ...interviewInput, notes: 'Changed payload' }, expected: 409 });
+  await call(interviewsEndpoint, { cookie: user, method: 'POST', body: { ...interviewInput, requestId: randomUUID(), completedOn: '9999-01-01' }, expected: 400 });
+  await call(interviewsEndpoint, { cookie: user, method: 'POST', body: { ...interviewInput, requestId: randomUUID(), userId: otherId }, expected: 400 });
+  await call(interviewsEndpoint, { cookie: other, method: 'POST', body: { ...interviewInput, requestId: randomUUID() }, expected: 404 });
+  await call(interviewsEndpoint, { cookie: user, method: 'POST', body: { ...interviewInput, requestId: randomUUID() }, origin: 'https://evil.example', expected: 403 });
+  await call(interviewsEndpoint, { cookie: user, method: 'POST', body: { ...interviewInput, requestId: randomUUID(), label: 'Final round', completedOn: '2024-03-01' }, expected: 201 });
+  const extraInterview = (await call(interviewsEndpoint, { cookie: user, method: 'POST', body: { ...interviewInput, requestId: randomUUID(), completedOn: '2024-03-02' }, expected: 201 })).data;
+  const report = (await call('/api/activity?' + historicalRange, { cookie: user })).data;
+  assert.equal(report.totals.interview_completed, 2); assert.equal(report.total, 2); assert.equal(report.series.length, 2);
+  assert.equal(report.series[0].interview_completed, 1); assert.equal(report.series[1].interview_completed, 1);
+  assert.ok(report.entries.every(entry => entry.jobId === job.id && entry.shortId === job.shortId));
+  const weekly = (await call('/api/activity?' + historicalRange + '&groupBy=week', { cookie: user })).data;
+  assert.equal(weekly.series.length, 1); assert.equal(weekly.series[0].date, '2024-02-26'); assert.equal(weekly.series[0].interview_completed, 2);
+  const monthly = (await call('/api/activity?' + historicalRange + '&groupBy=month', { cookie: user })).data;
+  assert.deepEqual(monthly.series.map(row => row.interview_completed), [1, 1]);
+  assert.equal((await call('/api/activity?' + historicalRange + '&company=Different', { cookie: user })).data.total, 0);
+  assert.equal((await call('/api/activity?' + historicalRange + '&workMode=Remote', { cookie: user })).data.total, 0);
+  assert.equal((await call('/api/activity?' + historicalRange + '&kind=applied', { cookie: user })).data.total, 0);
+  assert.equal((await call('/api/activity?' + historicalRange + '&userId=' + userId, { cookie: other })).data.total, 0);
+  assert.equal((await call('/api/manager/activity?' + historicalRange + '&userId=' + userId, { cookie: manager })).data.total, 2);
+  await call('/api/manager/activity?' + historicalRange + '&userId=' + userId, { cookie: other, expected: 403 });
+  await call('/api/manager/activity?' + historicalRange + '&userId=' + userId, { expected: 401 });
+  assert.equal((await call('/api/manager/jobs/' + job.id + '/interviews', { cookie: manager })).data.length, 3);
+  await call('/api/manager/jobs/' + job.id + '/interviews', { cookie: other, expected: 403 });
+  await call('/api/manager/jobs/' + job.id + '/interviews', { cookie: manager, method: 'POST', body: interviewInput, expected: 405 });
+  await call(interviewsEndpoint + '/' + extraInterview.id, { cookie: manager, method: 'DELETE', expected: 404 });
+  await call(interviewsEndpoint + '/' + extraInterview.id, { cookie: other, method: 'DELETE', expected: 404 });
+  await call(interviewsEndpoint + '/' + extraInterview.id, { cookie: user, method: 'DELETE', origin: 'https://evil.example', expected: 403 });
+  await call(interviewsEndpoint + '/' + extraInterview.id, { cookie: user, method: 'DELETE' });
+  assert.equal((await call(interviewsEndpoint, { cookie: user })).data.length, 2);
+  const savedEvent = (await pool.query("SELECT id FROM job_activity WHERE job_id=$1 AND kind='saved'", [job.id])).rows[0];
+  await call(interviewsEndpoint + '/' + savedEvent.id, { cookie: user, method: 'DELETE', expected: 404 });
+  await Promise.all(Array.from({ length: 22 }, () => pool.query("INSERT INTO job_activity(id,job_id,kind,occurred_at,label) VALUES ($1,$2,'interview_completed','2024-01-10T00:00:00Z','pagination fixture')", [randomUUID(), job.id])));
+  const paged = (await call('/api/activity?from=2024-01-10&to=2024-01-10', { cookie: user })).data;
+  assert.equal(paged.total, 22); assert.equal(paged.entries.length, 20); assert.equal(paged.totals.interview_completed, 22);
+  const lastPage = (await call('/api/activity?from=2024-01-10&to=2024-01-10&page=999', { cookie: user })).data;
+  assert.equal(lastPage.page, 2); assert.equal(lastPage.entries.length, 2);
+  await pool.query("DELETE FROM job_activity WHERE job_id=$1 AND label='pagination fixture'", [job.id]);
+  assert.ok(firstInterview.id);
   await call('/api/jobs', { cookie: user, method: 'POST', body: { ...fields, url: fields.url.replace('?utm_source=test', '') }, expected: 409 });
   await call('/api/jobs', { cookie: other, method: 'POST', body: fields, expected: 201 });
   await call(endpoint, { cookie: other, method: 'PATCH', body: fields, expected: 404 });
@@ -121,11 +173,18 @@ try {
   const applied = (await call(endpoint, { cookie: user, method: 'PATCH', body: { action: 'setStatus', status: 'Applied' } })).data;
   const interview = (await call(endpoint, { cookie: user, method: 'PATCH', body: { action: 'setStatus', status: 'Interview' } })).data;
   assert.ok(applied.appliedAt); assert.equal(applied.appliedAt, interview.appliedAt);
+  await call(endpoint, { cookie: user, method: 'PATCH', body: { action: 'setStatus', status: 'Interview' } });
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM job_activity WHERE job_id=$1 AND kind='applied'", [job.id])).rows[0].n, 1);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM job_activity WHERE job_id=$1 AND kind='interview_completed'", [job.id])).rows[0].n, 2, 'Interview status must not invent a completed round');
   assert.equal(interview.shortId, job.shortId, 'Opportunity IDs must survive status changes');
   await call(endpoint, { cookie: user, method: 'PATCH', body: { ...fields, shortId: 'newid123' }, expected: 400 });
   await call(endpoint, { cookie: user, method: 'PATCH', body: { action: 'setStatus', status: 'Saved' }, expected: 400 });
   const undone = (await call(endpoint, { cookie: user, method: 'PATCH', body: { action: 'undoApplied' } })).data;
   assert.equal(undone.appliedAt, null);
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM job_activity WHERE job_id=$1 AND kind='applied'", [job.id])).rows[0].n, 0);
+  for (const status of ['Offer', 'Rejected', 'Offer', 'Withdrawn']) await call(endpoint, { cookie: user, method: 'PATCH', body: { action: 'setStatus', status } });
+  const milestones = (await pool.query("SELECT kind,count(*)::int AS n FROM job_activity WHERE job_id=$1 GROUP BY kind", [job.id])).rows;
+  for (const kind of ['saved','applied','offer','rejected','withdrawn']) assert.equal(milestones.find(row => row.kind === kind)?.n, 1, 'Milestones must count once per job');
   await call(endpoint, { cookie: user, method: 'PATCH', body: { ...fields, userId: otherId }, expected: 400 });
   await call(endpoint, { cookie: user, method: 'PATCH', body: fields, origin: 'https://evil.example', expected: 403 });
   // The canonical URL index accepts the documented 4,000-character URL bound.
@@ -138,7 +197,7 @@ try {
   await call('/api/manager/users/' + managerId, { cookie: manager, method: 'DELETE', body: { confirmationEmail: managerEmail }, expected: 403 });
   await call('/api/manager/users/' + userId, { cookie: manager, method: 'DELETE', body: { confirmationEmail: 'wrong@example.test' }, expected: 400 });
   await call('/api/manager/users/' + userId, { cookie: manager, method: 'DELETE', body: { confirmationEmail: email } });
-  for (const [table, column, id] of [['users','id',userId],['jobs','user_id',userId],['resumes','job_id',job.id],['sessions','user_id',userId],['profiles','user_id',userId]]) {
+  for (const [table, column, id] of [['users','id',userId],['jobs','user_id',userId],['resumes','job_id',job.id],['sessions','user_id',userId],['profiles','user_id',userId],['job_activity','job_id',job.id]]) {
     assert.equal((await pool.query('SELECT count(*)::int AS count FROM ' + table + ' WHERE ' + column + '=$1', [id])).rows[0].count, 0);
   }
   await call('/api/jobs', { cookie: userAgain, expected: 401 });
@@ -148,7 +207,7 @@ try {
   await call('/api/jobs', { cookie: other, expected: 401 });
   await call('/api/auth/logout', { cookie: manager, method: 'POST' });
   await call('/api/manager/users', { cookie: manager, expected: 401 });
-  console.log('Passed ' + checks + ' API checks against real PostgreSQL (approval, isolation, manager permissions, profiles, concurrent saves, page sizes, stable IDs, resumes, CSRF, sessions, cascade deletion).');
+  console.log('Passed ' + checks + ' API checks against real PostgreSQL (activity date boundaries, grouping/filters/pagination, interview idempotency and corrections, milestone deduplication, approval, ownership, profiles, resumes, CSRF, sessions, cascade deletion).');
 } finally {
   await pool.query('DELETE FROM users WHERE email = ANY($1::text[])', [[managerEmail, email, otherEmail]]);
   await pool.end();

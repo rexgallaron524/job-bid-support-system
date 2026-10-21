@@ -2,6 +2,14 @@
 
 Date: 2026-10-21.
 
+## Progress dashboard and completed interviews — 2026-10-21
+
+Added an owner-scoped progress dashboard with UTC daily/weekly/monthly grouping, date presets and inclusive custom ranges, company/activity/work-arrangement filters, six milestone totals, a chart, exact period values, and a paginated activity feed. Completed interview rounds are recorded manually by date and can be removed to correct mistakes. Retried submissions are idempotent. Saved/application/outcome milestones are recorded transactionally; repeated status changes cannot duplicate them. Undoing Applied removes its application milestone, and job/account deletion cascades to activity. Managers have read-only reports and interview views.
+
+Validation passed: **20 unit tests**, production build and TypeScript checking, **127 API checks against isolated PostgreSQL**, CLI account checks, and Edge browser checks. Coverage includes inclusive date boundaries, Monday-start weeks and month grouping, filtering, totals across multiple feed pages, owner/manager access, interview retries/removal, milestone deduplication, application undo, and cascade deletion. Browser checks exercised multiple interview rounds, correction removal, date/group/filter controls, matching metric counts, existing profile/export/pagination flows, desktop/mobile layouts, and runtime errors. Dashboard screenshots were inspected.
+
+Migration **003_activity_dashboard.sql** passed initial and repeated runs. A pre-existing Interview-status job retained its data and recovered only the exact known saved/application dates; no completed interview was inferred. Earlier interview/outcome dates are not guessed. Verification was local; publishing the commit does not deploy the production VPS. Back up PostgreSQL and run `npm run db:migrate` before starting the updated app. Previously applied migration files were left unchanged.
+
 ## Master profile, pagination, and opportunity IDs — 2026-10-21
 
 Implemented a detailed, manually editable master profile with PostgreSQL storage and TXT download; account-saved 10/20/50 application pagination; visible/searchable/copyable opportunity IDs; and matching IDs in both exported folder names and jd.txt. Managers can read saved profiles, and account deletion cascades to profile data. Revision checks prevent stale tabs from overwriting a newer saved profile. Existing opportunity IDs and export folder names are preserved.

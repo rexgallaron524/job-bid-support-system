@@ -10,6 +10,7 @@ See the [detailed functionality guide](docs/FUNCTIONALITIES.md) and [verificatio
 - All applications pagination with 10, 20, or 50 rows per page; the choice is saved to your account.
 - A detailed **My profile** page for manually entering your LinkedIn information and complete career history, with a `profile.txt` download for resume preparation.
 - Visible, searchable opportunity IDs that also appear in the exported folder name and inside `jd.txt`.
+- A **Progress dashboard** with date filters, daily/weekly/monthly charts, application milestones, and completed interview rounds.
 - Job titles/descriptions, notes, deadlines, search, filters, status tracking, and tailored PDF/DOCX resumes.
 - Manual applications: open the posting, apply there, then mark the job as applied.
 - Export title + description to `D:\jobbid\{date}-{company}-{short-id}\jd.txt`, remembering your chosen root folder in this browser.
@@ -83,9 +84,17 @@ Click **Save profile** to store it in PostgreSQL. The app warns before leaving w
 
 After saving, **Download profile TXT** downloads `profile.txt` through your browser's usual download flow. Use it together with an opportunity's `jd.txt` in your local Codex workspace, then upload the finished PDF/DOCX resume to that opportunity. The app does not import LinkedIn automatically or generate a resume.
 
+## Daily, weekly, and monthly progress
+
+Open **Progress dashboard** in the navigation or from Overview. Track jobs saved, applications submitted, completed interview rounds, and first recorded Offer/Rejected/Withdrawn milestones. Choose Today, This week, This month, Last 7 days, Last 30 days, or custom dates (up to five years); group the chart daily, weekly, or monthly. Company, activity-type, and work-arrangement filters apply to both totals and records. Dates use **UTC**, weeks start Monday, and custom end dates are inclusive. The activity list is paginated independently of the summary, so later pages do not reduce totals.
+
+To count an interview, open the opportunity and choose **Log completed interview**. Enter its round name, actual completion date, and optional notes. Each finished round counts separately. This does not change the opportunity's status. Incorrect interview records can be removed after confirmation. The manager can view interview records and progress reports but cannot log/remove another user's rounds.
+
+Migration 003 recovers existing saved-job and application dates. Earlier interview and outcome dates were not stored, so they are not inferred from the current status. Repeated status changes do not duplicate a job's milestones. Undoing Applied removes its application milestone; deleting a job removes its activity records. Filters use the job's current company and work arrangement. Counts describe retained records, not an archive of deleted jobs.
+
 ## Updating an existing production installation
 
-This release adds `db/migrations/002_profiles_and_page_size.sql`, which creates master-profile storage and the saved page-size preference. It preserves existing users, jobs, resumes, sessions, and opportunity IDs. **Run `npm run db:migrate` before starting the updated application.** Keep your existing `.env` and database; do not initialize a fresh database or recreate the manager account.
+The profile/pagination update adds `002_profiles_and_page_size.sql`; the progress dashboard adds `003_activity_dashboard.sql`. The migration runner applies all pending files in order. These preserve existing users, jobs, resumes, sessions, profiles, and opportunity IDs. **Run `npm run db:migrate` before starting the updated application.** Keep your existing `.env` and database; do not initialize a fresh database or recreate the manager account.
 
 Back up PostgreSQL, stop your app service, pull the reviewed changes, run `npm ci`, `npm run db:migrate`, and `npm run build`, then restart your normal service after all commands succeed. Docker Compose applies migrations at app startup. See [the VPS update guide](GITHUB_VPS_SETUP.md) for the full workflow. The export-folder update alone required no migration; the profile and pagination update does.
 

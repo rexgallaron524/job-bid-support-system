@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "doctor": "node --env-file-if-exists=.env scripts/check-environment.mjs",
     "check:publish": "node scripts/check-publish.mjs",
-    "test": "node --experimental-strip-types --test tests/domain.test.mjs tests/security.test.mjs tests/export.test.mjs tests/profile.test.mjs",
+    "test": "node --experimental-strip-types --test tests/domain.test.mjs tests/security.test.mjs tests/export.test.mjs tests/profile.test.mjs tests/activity.test.mjs",
     "test:api": "node --experimental-strip-types --env-file-if-exists=.env tests/api.test.mjs",
     "test:integration": "node --env-file-if-exists=.env tests/run-integration.mjs",
     "db:migrate": "node --env-file-if-exists=.env scripts/migrate.mjs",

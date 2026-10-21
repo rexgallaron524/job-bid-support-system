@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { jobs } from "@/db/schema";
+import { jobs, jobActivity } from "@/db/schema";
 import { normalizeJobUrl } from "@/lib/domain";
 import { api, canonicalHash, jobInput, json, jsonBody, publicJob, userFor } from "@/lib/server";
 
@@ -19,7 +19,11 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const [result] = await getDb().insert(jobs).values({ ...input, id: crypto.randomUUID(), shortId: crypto.randomUUID().replaceAll("-", "").slice(0, 8), userId: user.userId, canonicalUrl: normalizeJobUrl(input.url), canonicalHash: canonicalHash(input.url), createdAt: now, updatedAt: now }).returning();
+        const result = await getDb().transaction(async tx => {
+          const [job] = await tx.insert(jobs).values({ ...input, id: crypto.randomUUID(), shortId: crypto.randomUUID().replaceAll("-", "").slice(0, 8), userId: user.userId, canonicalUrl: normalizeJobUrl(input.url), canonicalHash: canonicalHash(input.url), createdAt: now, updatedAt: now }).returning();
+          await tx.insert(jobActivity).values({ id: crypto.randomUUID(), jobId: job.id, kind: "saved", occurredAt: new Date(now) });
+          return job;
+        });
         return json(publicJob(result), 201);
       } catch (error) {
         const cause = (error as Error).cause as { code?: string; constraint?: string } | undefined;

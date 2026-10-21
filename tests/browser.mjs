@@ -41,7 +41,59 @@ try {
   await page.getByLabel('Job description', { exact: true }).fill('Build a reliable platform.\nUnicode: 日本語');
   await page.getByRole('button', { name: 'Save opportunity', exact: true }).click();
   await page.getByRole('button', { name: 'Export JD to folder' }).waitFor();
-  const job = (await pool.query('SELECT short_id, created_at FROM jobs WHERE user_id=$1', [id])).rows[0];
+  const job = (await pool.query('SELECT id, short_id, created_at FROM jobs WHERE user_id=$1', [id])).rows[0];
+  await page.getByRole('button', { name: 'Mark as applied', exact: true }).click();
+  const utcToday = new Date().toISOString().slice(0, 10), utcYesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  for (const [name, date] of [['Technical round', utcToday], ['Recruiter round', utcYesterday], ['Duplicate test round', utcToday]]) {
+    await page.getByRole('button', { name: 'Log completed interview', exact: true }).click();
+    await page.getByLabel('Interview round name', { exact: true }).fill(name);
+    await page.getByLabel('Interview completion date', { exact: true }).fill(date);
+    await page.getByLabel('Interview notes', { exact: true }).fill('Round completed. 日本語');
+    await page.getByRole('button', { name: 'Save completed interview', exact: true }).click();
+    await page.getByRole('status').filter({ hasText: 'Completed interview recorded.' }).waitFor();
+  }
+  await page.getByRole('button', { name: 'Remove interview Duplicate test round', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove interview record', exact: true }).click();
+  await page.getByRole('status').filter({ hasText: 'Interview record removed' }).waitFor();
+  await page.getByRole('button', { name: 'Close dialog' }).click();
+  const activityNavigation = page.getByRole('navigation', { name: 'Main navigation' });
+  await activityNavigation.getByRole('button', { name: 'Progress dashboard', exact: true }).click();
+  await page.getByLabel('Activity date range', { exact: true }).selectOption('7days');
+  const interviewMetric = page.getByRole('article', { name: 'Interviews completed', exact: true }).locator('strong');
+  const applicationMetric = page.getByRole('article', { name: 'Applications submitted', exact: true }).locator('strong');
+  await page.waitForFunction(() => document.querySelector('article[aria-label="Interviews completed"] strong')?.textContent === '2');
+  assert.equal(await applicationMetric.textContent(), '1');
+  for (const group of ['week', 'month', 'day']) {
+    const loaded = page.waitForResponse(response => response.url().includes('/api/activity?') && response.url().includes('groupBy=' + group) && response.status() === 200);
+    await page.getByLabel('Group activity by', { exact: true }).selectOption(group); await loaded;
+    await interviewMetric.waitFor(); assert.equal(await interviewMetric.textContent(), '2');
+  }
+  await page.getByLabel('Activity work arrangement', { exact: true }).selectOption('Remote');
+  await page.waitForFunction(() => document.querySelector('article[aria-label="Interviews completed"] strong')?.textContent === '0');
+  await page.getByLabel('Activity work arrangement', { exact: true }).selectOption('all');
+  await page.waitForFunction(() => document.querySelector('article[aria-label="Interviews completed"] strong')?.textContent === '2');
+  await page.getByLabel('Activity type', { exact: true }).selectOption('interview_completed');
+  await page.waitForFunction(() => document.querySelector('article[aria-label="Applications submitted"] strong')?.textContent === '0');
+  await page.getByLabel('Activity type', { exact: true }).selectOption('all');
+  await page.getByLabel('Activity date range', { exact: true }).selectOption('today');
+  await page.waitForFunction(() => document.querySelector('article[aria-label="Interviews completed"] strong')?.textContent === '1');
+  await page.getByLabel('Activity from date', { exact: true }).fill(utcYesterday);
+  await page.getByLabel('Activity through date', { exact: true }).fill(utcYesterday);
+  await page.getByRole('button', { name: 'Apply dates', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('article[aria-label="Applications submitted"] strong')?.textContent === '0');
+  assert.equal(await interviewMetric.textContent(), '1');
+  await page.getByLabel('Activity date range', { exact: true }).selectOption('7days');
+  await page.waitForFunction(() => document.querySelector('article[aria-label="Interviews completed"] strong')?.textContent === '2');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.locator('.toast').waitFor({ state: 'hidden' });
+  await page.screenshot({ path: fileURLToPath(new URL('activity-desktop.png', output)), fullPage: true, animations: 'disabled' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForFunction(() => document.querySelector('.sidebar').getBoundingClientRect().right <= 1);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'Activity dashboard must fit mobile width');
+  await page.screenshot({ path: fileURLToPath(new URL('activity-mobile.png', output)), fullPage: true, animations: 'disabled' });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await activityNavigation.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: /Platform Engineer/ }).first().click();
   const folder = job.created_at.slice(0,10) + '-Acme-' + job.short_id;
   // Real browser File System handles in isolated origin storage, avoiding an OS chooser in unattended QA.
   await page.addInitScript(() => {
@@ -210,6 +262,11 @@ try {
   await page.getByRole('heading', { name: 'Backend Engineer', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Edit details', exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Delete job', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Log completed interview', exact: true }).count(), 0);
+  await page.getByText('Progress dashboard · Read-only', { exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('article[aria-label="Interviews completed"] strong')?.textContent === '0');
+  assert.equal(await page.getByRole('button', { name: 'Save completed interview', exact: true }).count(), 0);
+  await page.getByText('Progress dashboard · Read-only', { exact: true }).click();
   await page.screenshot({ path: fileURLToPath(new URL('manager-light.png', output)), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
@@ -223,7 +280,7 @@ try {
   await page.waitForFunction(() => !document.querySelector('.export-control button').disabled);
   assert.equal(await page.getByRole('button', { name: 'Change export folder', exact: true }).count(), 0, 'Folder preferences must be scoped to the signed-in account');
   assert.deepEqual(errors, []);
-  console.log('Browser checks passed: job save, matching export IDs, remembered folders and permission handling, profile save/reload/download, unsaved changes guard, 10/20/50 pagination and last page, ID search, saved page-size preference, account isolation, themes, manager read-only views, mobile layouts, no runtime errors.');
+  console.log('Browser checks passed: progress metrics, daily/weekly/monthly grouping, custom dates and activity filters, multiple completed interview rounds and removal, read-only manager progress, job save/export IDs, remembered folders, profile save/download, unsaved changes guard, 10/20/50 pagination, account isolation, themes, mobile layouts, no runtime errors.');
 } catch (error) {
   await page.screenshot({ path: fileURLToPath(new URL('browser-failure.png', output)), fullPage: true }).catch(() => {});
   throw error;

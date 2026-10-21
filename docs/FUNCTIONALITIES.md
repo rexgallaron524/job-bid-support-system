@@ -162,6 +162,7 @@ Managers can:
 - Read title, company, URL, status, dates, description, notes, work details, salary, and resume metadata.
 - Download the user's current resume.
 - Read the user's saved master profile through a read-only section.
+- View the user's progress dashboard and completed interview records without editing them.
 - Delete an ordinary account after typing its exact email.
 
 Managers cannot:
@@ -182,7 +183,8 @@ User
 ├── Sessions
 ├── Master profile
 └── Jobs
-    └── Resume bytes
+    ├── Resume bytes
+    └── Activity milestones and completed interview rounds
 ```
 
 Jobs include the descriptions, notes, status and dates, so those disappear with the jobs. Active cookies no longer grant access. If any database operation fails, the transaction rolls back.
@@ -196,6 +198,7 @@ Local TXT exports and previously created database backups are outside the live c
 | Accounts, password hashes, roles, approval state | PostgreSQL |
 | Session token digests and expiry | PostgreSQL |
 | Jobs, descriptions, notes, status, dates | PostgreSQL |
+| Activity milestones and completed interview records | PostgreSQL |
 | Resume binary contents and metadata | PostgreSQL |
 | Master career profile and revision | PostgreSQL |
 | Application page-size preference | PostgreSQL |
@@ -211,7 +214,7 @@ The new source has no ChatGPT login, Cloudflare D1/R2 binding, or Sites deployme
 
 ## 15. Current boundaries and setup
 
-No automatic job applications, AI generation, cross-board semantic deduplication, bulk import, full status-history audit, resume versioning, email delivery, MFA, or automatic account recovery is included.
+No automatic job applications, AI generation, cross-board semantic deduplication, bulk import, full status-history audit, resume versioning, email delivery, MFA, or automatic account recovery is included. The progress dashboard records selected milestones and completed interviews; it is not a complete audit of every edit or status transition.
 
 For setup/testing, see [jobbid/README.md](../README.md). For Windows hosting, HTTPS, database backup and service setup, see [WINDOWS_VPS_SETUP.md](../WINDOWS_VPS_SETUP.md). See [DEPLOYMENT.md](VERIFICATION.md) for the checks actually completed and deployment limits.
 
@@ -230,3 +233,17 @@ To prepare a tailored resume: save/download the master profile, export the targe
 Ordinary users can read and update only their own profile. The manager can read profiles but cannot modify another user's profile through the manager API or dashboard. Deleting an account cascades to its profile as well as its application records. Local profile downloads and database backups remain outside that cascade.
 
 Upgrading an existing installation requires **002_profiles_and_page_size.sql**, applied with `npm run db:migrate` before restarting the updated app. This migration preserves existing records and IDs; it does not reset the production database.
+
+## 17. Progress dashboard and completed interviews
+
+Open **Progress dashboard** to view activity by date. Its six totals show jobs saved, applications submitted, interview rounds completed, offers recorded, rejections recorded, and withdrawals recorded. The chart supports **daily, weekly, or monthly** buckets and an expandable table of exact values, including zero-activity periods. The activity feed shows opportunity IDs and links back to the corresponding job, with 20 records per page; summary totals cover the entire selected range rather than only the current page.
+
+Date presets are Today, This week, This month, Last 7 days, Last 30 days, and Custom dates. Custom ranges support up to five years. From/through dates are inclusive, use UTC, and weeks start Monday. Weekly/monthly buckets may start before the chosen range, but include only events within that range. Filter by company, activity type, or work arrangement; every filter applies to the totals, chart, and activity feed. Company/work-arrangement filtering uses the opportunity's current details.
+
+New opportunities record their saved date transactionally. The first recorded application creates an application event using the job's application timestamp. Offer, Rejected, and Withdrawn milestones record the first transition to each of those statuses after this feature is installed. Repeating or revisiting a status does not create another milestone of the same kind for that opportunity. These historical milestones remain counted when the current status later changes. Undoing Applied removes its application event; applying again records a new application date. Interview records are independent of application status.
+
+In opportunity details, choose **Log completed interview**. Enter the round name, actual completion date, and optional notes. Each round is a separate event, even for the same opportunity or date. Future completion dates are rejected. Retrying the same submission does not create duplicate records. Incorrect completed-interview records can be removed after confirmation, which updates the dashboard counts; this does not edit the opportunity's status or remove automatic milestones. Moving a job to Interview status alone never counts as a completed interview.
+
+Migration **003_activity_dashboard.sql** recovers existing saved and application dates from their stored timestamps. It does not invent old interview or outcome dates from the current status or last edit date. You may manually log earlier completed interview rounds using their actual dates. Existing users, profiles, resumes, jobs, and IDs are preserved. Apply the migration before starting the updated app.
+
+Ordinary users can query and edit only their own interview records and view only their own activity report. Managers can inspect another user's report/interviews through read-only endpoints and dashboard controls. Deleting a job cascades to its milestones and interviews; deleting an account cascades through all of its jobs and their activity. Dashboard totals therefore describe retained records, rather than an archive of deleted processes.
