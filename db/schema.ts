@@ -1,10 +1,24 @@
-import { sqliteTable, text, integer, uniqueIndex, index } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, uniqueIndex, index, customType, timestamp } from "drizzle-orm/pg-core";
 
-export const jobs = sqliteTable("jobs", {
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+export const users = pgTable("users", {
+  id: text("id").primaryKey(), email: text("email").notNull().unique(), name: text("name").notNull(),
+  passwordHash: text("password_hash").notNull(), role: text("role").notNull().default("user"),
+  status: text("status").notNull().default("pending"), createdAt: text("created_at").notNull(),
+  theme: text("theme").notNull().default("dark"),
+});
+export const sessions = pgTable("sessions", {
+  tokenHash: text("token_hash").primaryKey(), userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, t => [index("sessions_user").on(t.userId)]);
+
+export const jobs = pgTable("jobs", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull(),
+  shortId: text("short_id").notNull().unique(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   url: text("url").notNull(),
   canonicalUrl: text("canonical_url").notNull(),
+  canonicalHash: text("canonical_hash").notNull(),
   company: text("company").notNull(),
   title: text("title").notNull(),
   location: text("location").notNull().default(""),
@@ -21,6 +35,13 @@ export const jobs = sqliteTable("jobs", {
   resumeSize: integer("resume_size"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
-}, (t) => [uniqueIndex("jobs_owner_url").on(t.userId, t.canonicalUrl), index("jobs_owner_updated").on(t.userId, t.updatedAt)]);
+}, (t) => [uniqueIndex("jobs_owner_url").on(t.userId, t.canonicalHash), index("jobs_owner_updated").on(t.userId, t.updatedAt)]);
 
 export type JobRecord = typeof jobs.$inferSelect;
+
+export const resumes = pgTable("resumes", {
+  jobId: text("job_id").primaryKey().references(() => jobs.id, { onDelete: "cascade" }), data: bytea("data").notNull(),
+});
+export const authLimits = pgTable("auth_limits", {
+  key: text("key").primaryKey(), count: integer("count").notNull(), resetsAt: timestamp("resets_at", { withTimezone: true }).notNull(),
+});

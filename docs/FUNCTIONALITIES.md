@@ -1,0 +1,204 @@
+# All in one place-job support — Version 2 functionality
+
+This describes the standalone PostgreSQL version in [jobbid/](../). It replaces the prototype's ChatGPT sign-in and D1/R2 storage. The new database starts empty; old records are not imported.
+
+## 1. Accounts, privacy, and approvals
+
+Sign in using your own email and password. New users request an account with a display name, email, password (12–128 characters), and acknowledgement that the manager can view their application data.
+
+New accounts are **pending**. The manager approves or rejects them. Pending, rejected, and suspended users cannot access a workspace. There is no automatic email verification or email notification in this release; applicants should use an address they control.
+
+Ordinary users can access only their own jobs and resumes. Duplicate checks are also per user. The manager can read all users' application records, descriptions, notes, and resume files. This visibility is disclosed on signup and in Settings.
+
+Passwords are salted and hashed with scrypt. A random session token is stored in an HttpOnly, SameSite cookie; the database stores its SHA-256 digest. Production cookies require HTTPS. Sessions expire after 12 hours. Password changes, password resets, and manager account-status changes revoke affected sessions. Login/signup attempts have persistent database-backed rate limits.
+
+Settings includes password change. A forgotten password requires the server operator's `npm run account:reset-password` command. No ChatGPT account, ChatGPT identity, OpenAI API key, or automatic Codex integration is required.
+
+## 2. Main workflow
+
+1. Find a job yourself.
+2. Save its URL, company, title, and optional details.
+3. Paste the description and export it if you want to prepare a resume locally.
+4. Upload the PDF/DOCX resume suited to the job.
+5. Click **Apply** to open the original posting in another tab.
+6. Submit the application manually on that website.
+7. Return and choose **Mark as applied**.
+8. Update the status as the application progresses.
+
+Opening a posting does not mark the job as applied and does not submit any information. Applied jobs have a disabled Apply control and still offer **View posting**.
+
+## 3. Saving and editing jobs
+
+Required: full HTTP/HTTPS job URL, company name, and job title.
+
+Optional: location, work arrangement, salary text, deadline, job description, personal notes, and a tailored resume.
+
+| Field | Limit / choices |
+| --- | --- |
+| URL | 4,000 characters; public-style HTTP/HTTPS URL without embedded credentials |
+| Company | 200 characters |
+| Job title | 250 characters |
+| Location | 250 characters |
+| Salary text | 150 characters |
+| Description | 60,000 characters |
+| Notes | 30,000 characters |
+| Work arrangement | Unspecified, Remote, Hybrid, On-site |
+| Deadline | Valid calendar date |
+
+A complete JSON request also has a 200 KB size limit. Editing details preserves the job's application state/date. Jobs have a UUID internally and a stable, eight-character short ID for display and exports.
+
+You can delete your own job after confirmation. Its attached resume is deleted from PostgreSQL in the same cascading database operation.
+
+## 4. Duplicate URL detection
+
+The app compares normalized URLs and rejects duplicates in your own workspace. The database enforces uniqueness using the owner and a SHA-256 digest of the canonical URL, including for long URLs.
+
+Normalization ignores common tracking parameters (`utm_*`, `gclid`, `fbclid`, and similar), normalizes hostnames, removes `www`, ignores ordinary fragments/trailing slashes, and sorts query parameters. Job identifiers and hash-based application routes are retained.
+
+The same URL may exist in separate users' workspaces. Different job-board URLs describing the same role are not detected as semantic duplicates. The app does not follow short links or scrape postings.
+
+## 5. Company identification
+
+When adding a new job, leaving the URL field can suggest a company from recognized posting URL patterns such as Lever, Greenhouse, Ashby, Workable, SmartRecruiters, and Workday.
+
+Other company career domains use a domain-name heuristic. General job boards may leave the suggestion blank. Suggestions remain editable. Once you manually edit the company, the UI respects your input.
+
+This is URL-based inference, not a verified company lookup. Logos are generated initials.
+
+## 6. Application statuses and dates
+
+Available statuses: **Saved, Preparing, Applied, Interview, Offer, Rejected, Withdrawn**.
+
+New jobs start Saved. Applied, Interview, or Offer sets an application timestamp if one does not already exist. Subsequent status changes preserve it. Rejected/Withdrawn alone does not create an application date.
+
+You cannot move a job with an application date back to Saved/Preparing until you explicitly choose **Undo applied**. Undo clears the application date and returns the job to Saved while retaining its description, notes, and resume.
+
+Status changes use PostgreSQL row locks so simultaneous requests base their decisions on the latest job state. This version stores current status and saved/applied/updated dates; it does not keep a full event-by-event application history or allow editing historical applied dates.
+
+## 7. Tailored resumes
+
+Each job can have one current PDF or DOCX attachment up to **10 MiB (10,485,760 bytes)**. The app checks extension and basic document signatures; it does not run antivirus scanning or analyze resume content.
+
+Upload, replace, download, or remove the attachment from job details. Uploading a new version overwrites the current saved copy, including for an applied job. There is no attachment version history or immutable submitted-resume snapshot.
+
+Resume bytes live in PostgreSQL `bytea`, with associated filename/type/size metadata. Attachment writes and metadata changes are transactional. Owners and managers have separate authenticated download endpoints. Other ordinary users cannot download them.
+
+The My resumes page lists jobs with documents and offers downloads and job links. If a job save succeeds but a subsequent upload fails, the UI retains the saved job and allows retrying.
+
+## 8. Local TXT export
+
+In a job's details, click **Export JD to folder** and choose **D:\jobbid** in the browser folder picker.
+
+Example:
+
+```text
+D:\jobbid\2026-10-21-Acme-a1b2c3d4\jd.txt
+```
+
+The subfolder uses the job's UTC saved date, sanitized company name, and stable short ID. Invalid Windows filename characters are replaced. The resulting UTF-8 text contains:
+
+```text
+Job title: Platform Engineer
+
+Job description:
+The saved description...
+```
+
+Text uses Windows-style line endings. Re-exporting the same job/company replaces its `jd.txt`. Changing the company produces a different folder name; old local files are not cleaned up automatically.
+
+Export requires Edge/Chrome and HTTPS or localhost. The browser asks you to select a directory; it cannot silently write to an arbitrary drive. The selected directory belongs to the computer running the browser, even when the server is a remote VPS. Select D:\jobbid itself, rather than one of its existing job subfolders.
+
+These are ordinary folders, not Git repositories or submodules. Exports are local copies for your own Codex workflow. The application does not launch Codex, generate resumes, or upload exported descriptions to an AI provider.
+
+## 9. Dashboard, browsing, and search
+
+Overview shows:
+- Total opportunities.
+- Applications sent: jobs with an application date, including later stages.
+- In conversation: jobs currently in Interview.
+- Saved for later: Saved + Preparing jobs.
+
+Clicking a statistic opens its corresponding set of records, including the combined sent/saved groups. This corrects the prototype's mismatch between some totals and their filters.
+
+Browse all applications; filter by status or work arrangement; search by title, company, location, or notes. Search does not inspect the description, original URL, salary, or resume contents.
+
+Sort newest first, company A–Z, or deadline first. Overview pages contain five jobs; the full application list contains ten per page. The app fetches the signed-in user's list and filters/pages it in the browser. It does not provide live synchronization between open tabs.
+
+The journey chart summarizes current statuses. Help explains the manual workflow.
+
+## 10. Deadlines
+
+Add a valid deadline to a job to include it in deadline views while it is unapplied and not Offer/Rejected/Withdrawn.
+
+The overview shows the nearest three deadlines; the deadline page shows all eligible jobs. The navigation/bell count includes deadlines within seven days and overdue entries. Dates use UTC, and the open page refreshes its current-date calculation periodically.
+
+These are in-app reminders. There is no email/push delivery, calendar integration, interview scheduling, or automatic posting-expiry detection.
+
+## 11. Appearance and accessibility
+
+Dark mode is the default. Toggle dark/light from the header or Settings. Signed-in preferences are stored in PostgreSQL and restored at login; browser local storage helps set an initial appearance before the page loads. Signed-out appearance uses that local browser preference.
+
+The interface adapts to desktop and mobile widths, with a mobile navigation drawer. Dialogs include keyboard focus management and Escape handling; inputs and primary actions have labels, and reduced-motion preference is respected.
+
+The application/browser title is **All in one place-job support**.
+
+## 12. Manager dashboard
+
+The manager is bootstrapped from a server-side command, not from public signup. Your own email/password is entered during setup; no default manager password is shipped.
+
+The dashboard lives at `/{MANAGER_PATH}` (default `/manager`). A different path can be configured, but authentication, role checks, and HTTPS are what secure it.
+
+Managers can:
+- See account names/emails, roles, approval states, and job counts.
+- Search users and refresh the account list.
+- Approve, reject, suspend, or reapprove ordinary users.
+- Open any user's current application list.
+- Read title, company, URL, status, dates, description, notes, work details, salary, and resume metadata.
+- Download the user's current resume.
+- Delete an ordinary account after typing its exact email.
+
+Managers cannot:
+- Edit another user's job fields or application status.
+- Delete another user's individual job or attachment.
+- Promote an ordinary user to manager through the web API.
+- Delete/suspend manager accounts through the dashboard.
+
+A manager still has their own ordinary workspace and can edit their own applications there.
+
+## 13. Deleting users
+
+Confirmed account deletion is a PostgreSQL transaction with foreign-key cascades:
+
+```text
+User
+├── Sessions
+└── Jobs
+    └── Resume bytes
+```
+
+Jobs include the descriptions, notes, status and dates, so those disappear with the jobs. Active cookies no longer grant access. If any database operation fails, the transaction rolls back.
+
+Local TXT exports and previously created database backups are outside the live cascade and remain until separately removed or expired. Persistent hashed rate-limit entries are temporary security records; they are not application-process records.
+
+## 14. Data storage and hosting
+
+| Data | Location |
+| --- | --- |
+| Accounts, password hashes, roles, approval state | PostgreSQL |
+| Session token digests and expiry | PostgreSQL |
+| Jobs, descriptions, notes, status, dates | PostgreSQL |
+| Resume binary contents and metadata | PostgreSQL |
+| Signed-in appearance preference | PostgreSQL; browser cache for initial render |
+| Temporary hashed authentication rate limits | PostgreSQL |
+| Authentication cookie | Browser; HttpOnly, Secure in production |
+| Exported jd.txt files | User-selected local Windows folder |
+
+The application runs as a standard Node.js/Next.js server. Native Windows deployment and optional Docker Compose configuration are included, with Caddy for HTTPS. No domain registration or VPS publication happens automatically.
+
+The new source has no ChatGPT login, Cloudflare D1/R2 binding, or Sites deployment manifest. The original private hosted prototype is a separate old deployment and has not been removed by changing local source.
+
+## 15. Current boundaries and setup
+
+No automatic job applications, AI generation, cross-board semantic deduplication, bulk import, full status-history audit, resume versioning, email delivery, MFA, or automatic account recovery is included.
+
+For setup/testing, see [jobbid/README.md](../README.md). For Windows hosting, HTTPS, database backup and service setup, see [WINDOWS_VPS_SETUP.md](../WINDOWS_VPS_SETUP.md). See [DEPLOYMENT.md](VERIFICATION.md) for the checks actually completed and deployment limits.

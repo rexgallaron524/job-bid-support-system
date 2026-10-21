@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { z } from "zod";
-import { getChatGPTUser } from "@/app/chatgpt-auth";
+import { currentUser } from "./auth";
 import { getDb } from "@/db";
 import { jobs, type JobRecord } from "@/db/schema";
 import { isValidDate, normalizeJobUrl, WORK_MODES } from "./domain";
@@ -9,26 +10,36 @@ export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
-export async function userFor(request: Request) {
+export function assertSameOrigin(request: Request) {
   if (!["GET", "HEAD"].includes(request.method)) {
     const origin = request.headers.get("origin");
-    if (request.headers.get("sec-fetch-site") === "cross-site" || (origin && origin !== new URL(request.url).origin)) throw new ApiError(403, "This request must come from your workspace.");
+    const expected = process.env.APP_ORIGIN || new URL(request.url).origin;
+    if (request.headers.get("sec-fetch-site") === "cross-site" || !origin || origin !== expected) throw new ApiError(403, "This request must come from your workspace.");
   }
-  const user = await getChatGPTUser();
+}
+export async function userFor(request: Request) {
+  assertSameOrigin(request);
+  const user = await currentUser();
   if (!user) throw new ApiError(401, "Please sign in again to continue.");
+  return user;
+}
+export async function managerFor(request: Request) {
+  const user = await userFor(request);
+  if (user.role !== "manager") throw new ApiError(403, "Manager access is required.");
   return user;
 }
 
 export async function ownedJob(userId: string, id: string) {
-  const job = await getDb().select().from(jobs).where(and(eq(jobs.id, id), eq(jobs.userId, userId))).get();
+  const [job] = await getDb().select().from(jobs).where(and(eq(jobs.id, id), eq(jobs.userId, userId)));
   if (!job) throw new ApiError(404, "This job was not found.");
   return job;
 }
 
 export const ownerWhere = (userId: string, id: string) => and(eq(jobs.id, id), eq(jobs.userId, userId));
+export const canonicalHash = (url: string) => createHash("sha256").update(normalizeJobUrl(url)).digest("hex");
 export function publicJob(job: JobRecord) {
-  const { userId, canonicalUrl, resumeKey, resumeType, ...result } = job;
-  void userId; void canonicalUrl; void resumeKey; void resumeType;
+  const { userId, canonicalUrl, canonicalHash: hash, resumeKey, resumeType, ...result } = job;
+  void userId; void canonicalUrl; void hash; void resumeKey; void resumeType;
   return result;
 }
 
@@ -44,10 +55,22 @@ export const jobInput = z.object({
   deadline: z.union([z.string().refine(isValidDate, "Choose a valid deadline."), z.null()]).default(null),
 }).strict();
 
-export async function jsonBody(request: Request) {
-  if (Number(request.headers.get("content-length")) > 200000) throw new ApiError(413, "The job details are too large.");
-  const body = await request.text();
-  if (body.length > 200000) throw new ApiError(413, "The job details are too large.");
+export async function jsonBody(request: Request, limit = 200000) {
+  if (Number(request.headers.get("content-length")) > limit) throw new ApiError(413, "The request is too large.");
+  if (!request.body) throw new ApiError(400, "Invalid request data.");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > limit) { await reader.cancel(); throw new ApiError(413, "The request is too large."); }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const body = Buffer.concat(chunks).toString("utf8");
   try { return JSON.parse(body); } catch { throw new ApiError(400, "Invalid request data."); }
 }
 
@@ -78,8 +101,10 @@ export async function api(action: () => Promise<Response>) {
   try { return await action(); } catch (error) {
     if (error instanceof ApiError) return json({ error: error.message }, error.status);
     if (error instanceof z.ZodError) return json({ error: error.issues[0]?.message ?? "Check your job details." }, 400);
-    if (error instanceof Error && /UNIQUE constraint failed/.test(error.message + String(error.cause))) return json({ error: "You already saved this job URL. Find it in All applications." }, 409);
-    console.error("Jobbid API error", error);
+    const cause = error instanceof Error ? error.cause as { code?: string; constraint?: string } | undefined : undefined;
+    if (cause?.code === "23505" && cause.constraint === "jobs_owner_url") return json({ error: "You already saved this job URL. Find it in All applications." }, 409);
+    // Never log query parameters (password hashes, descriptions, resumes, tokens).
+    console.error("Job support API error", error instanceof Error ? error.name : "UnknownError");
     return json({ error: "Something went wrong. Please try again." }, 500);
   }
 }

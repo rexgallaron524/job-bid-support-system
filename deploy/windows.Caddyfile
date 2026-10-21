@@ -1,0 +1,10 @@
+# Replace with your DuckDNS/custom hostname.
+your-name.duckdns.org {
+  encode zstd gzip
+  header Strict-Transport-Security "max-age=31536000"
+  request_body {
+    max_size 11MB
+  }
+  reverse_proxy 127.0.0.1:3000
+}
+

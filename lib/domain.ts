@@ -5,7 +5,7 @@ export const MAX_RESUME_SIZE = 10 * 1024 * 1024;
 export const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export type Job = {
-  id: string; url: string; company: string; title: string; location: string;
+  id: string; shortId: string; url: string; company: string; title: string; location: string;
   workMode: string; salary: string; description: string; notes: string; status: string;
   deadline: string | null; appliedAt: string | null; resumeName: string | null;
   resumeSize: number | null; createdAt: string; updatedAt: string;

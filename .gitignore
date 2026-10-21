@@ -21,6 +21,9 @@
 # misc
 .DS_Store
 *.pem
+*.key
+id_rsa
+id_ed25519
 
 # debug
 npm-debug.log*
@@ -30,6 +33,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -37,14 +41,10 @@ yarn-error.log*
 # typescript
 next-env.d.ts
 
-# Maintained Vite plugin and worker sources.
-!/build/
-/build/*
-!/build/connector-preview-plugin.mjs
-!/build/connector-preview-worker.mjs
-!/build/sites-vite-plugin.LICENSE
-!/build/sites-vite-plugin.ts
-!/build/sites-worker.ts
+# Old hosting artifacts and local tooling.
+/build/
+/.openai/
+/.tools/
 
 /dist/
 /.wrangler/
@@ -55,3 +55,11 @@ next-env.d.ts
 /outputs/
 /work/
 *.tsbuildinfo
+
+# Local database backups and exported application files.
+/backups/
+/exports/
+*.dump
+*.backup
+*.tar.gz
+*.zip

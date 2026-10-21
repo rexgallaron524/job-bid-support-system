@@ -1,27 +1,26 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-import { spawnSync } from "node:child_process";
-
-const root = fileURLToPath(new URL("../", import.meta.url));
-const [major, minor] = process.versions.node.split(".").map(Number);
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import pg from 'pg';
+const root = fileURLToPath(new URL('../', import.meta.url));
 let failed = false;
-function check(ok, message, fix = "") {
-  console.log(`${ok ? "OK" : "MISSING"}  ${message}`);
-  if (!ok) { failed = true; if (fix) console.log(`         ${fix}`); }
+function check(ok, message) { console.log((ok ? 'OK       ' : 'MISSING  ') + message); if (!ok) failed = true; }
+console.log('All in one place-job support — environment check\n');
+const [major, minor] = process.versions.node.split('.').map(Number);
+check(major > 22 || (major === 22 && minor >= 13), 'Node.js 22.13+ (current: ' + process.versions.node + ')');
+check(existsSync(path.join(root, 'node_modules/next/package.json')), 'Dependencies installed (npm ci)');
+check(Boolean(process.env.DATABASE_URL), 'DATABASE_URL configured in .env');
+try { const origin = new URL(process.env.APP_ORIGIN); check(['http:', 'https:'].includes(origin.protocol) && origin.origin === process.env.APP_ORIGIN && (process.env.NODE_ENV !== 'production' || origin.protocol === 'https:'), 'APP_ORIGIN is an exact origin; production requires HTTPS'); }
+catch { check(false, 'APP_ORIGIN configured (example: http://localhost:3000)'); }
+check(/^[a-z0-9][a-z0-9-]{2,79}$/.test(process.env.MANAGER_PATH || 'manager'), 'Manager URL path is valid');
+if (process.env.DATABASE_URL) {
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
+  try {
+    const result = await pool.query("SELECT current_setting('server_version') AS version, to_regclass('users') AS users");
+    check(true, 'PostgreSQL connected (version ' + result.rows[0].version + ')');
+    check(Boolean(result.rows[0].users), 'Schema migrated (npm run db:migrate)');
+  } catch { check(false, 'PostgreSQL connection/schema — check the service and DATABASE_URL'); }
+  finally { await pool.end(); }
 }
-console.log("Jobbid environment check\n");
-check(major > 22 || (major === 22 && minor >= 13), `Node.js ${process.versions.node}`, "Use Node.js 22.13 or newer.");
-const git = spawnSync("git", ["--version"], { encoding: "utf8", windowsHide: true });
-check(git.status === 0, git.status === 0 ? git.stdout.trim() : "Git", "Install Git and reopen your terminal before publishing.");
-if (process.platform === "win32") {
-  const system = path.join(process.env.SystemRoot || "C:/Windows", "System32");
-  check(["vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"].every((name) => existsSync(path.join(system, name))), "Microsoft Visual C++ x64 runtime", "Install the Microsoft Visual C++ v14 Redistributable (x64): https://aka.ms/vc14/vc_redist.x64.exe");
-}
-check(existsSync(path.join(root, "node_modules/.bin", process.platform === "win32" ? "vinext.cmd" : "vinext")), "Project dependencies", "Run npm run install:ci from the jobbid directory.");
-const hosting = JSON.parse(readFileSync(path.join(root, ".openai/hosting.json"), "utf8"));
-check(hosting.d1 === "DB" && hosting.r2 === "BUCKET", "Local database and resume storage bindings");
-check(existsSync(path.join(root, "drizzle")) && readdirSync(path.join(root, "drizzle")).some((name) => name.endsWith(".sql")), "Database migration", "Run npm run db:generate once after the initial schema is created.");
-console.log("\nNo .env file or application API keys are required by this version.");
-console.log("Local development emulates storage and sign-in on loopback.");
+console.log('\nWindows exports require Edge or Chrome and HTTPS (or localhost).');
 process.exitCode = failed ? 1 : 0;

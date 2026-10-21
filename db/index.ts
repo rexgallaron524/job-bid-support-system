@@ -1,13 +1,14 @@
-import { env } from "cloudflare:workers";
-import { drizzle } from "drizzle-orm/d1";
+import pg from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
 import * as schema from "./schema";
 
-export function getDb() {
-  if (!env.DB) {
-    throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
-    );
+const globalDb = globalThis as unknown as { jobSupportPool?: pg.Pool };
+export function getPool() {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required. Follow README.md to configure PostgreSQL.");
+  if (!globalDb.jobSupportPool) {
+    globalDb.jobSupportPool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 10, connectionTimeoutMillis: 5000 });
+    globalDb.jobSupportPool.on("error", () => console.error("An idle PostgreSQL connection closed."));
   }
-
-  return drizzle(env.DB, { schema });
+  return globalDb.jobSupportPool;
 }
+export function getDb() { return drizzle(getPool(), { schema }); }

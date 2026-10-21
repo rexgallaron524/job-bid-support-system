@@ -28,8 +28,7 @@
       ]
     },
     "types": [
-      "node",
-      "@cloudflare/workers-types"
+      "node"
     ]
   },
   "include": [
@@ -42,6 +41,10 @@
   ],
   "exclude": [
     "node_modules",
-    "examples"
+    "examples", "dist", ".sites-runtime", ".wrangler",
+    "build",
+    "vite.config.ts",
+    "lib/connector-context.ts",
+    "lib/connectors.ts"
   ]
 }

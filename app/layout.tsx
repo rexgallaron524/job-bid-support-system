@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Jobbid — Your next chapter",
+  title: "All in one place-job support",
   description: "Your private workspace for job applications, tailored resumes, and what comes next.",
   icons: {
     icon: "/favicon.svg",
