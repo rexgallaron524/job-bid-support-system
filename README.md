@@ -88,6 +88,10 @@ After saving, **Download profile TXT** downloads `profile.txt` through your brow
 
 Open **Progress dashboard** in the navigation or from Overview. Track jobs saved, applications submitted, completed interview rounds, and first recorded Offer/Rejected/Withdrawn milestones. Choose Today, This week, This month, Last 7 days, Last 30 days, or custom dates (up to five years); group the chart daily, weekly, or monthly. Company, activity-type, and work-arrangement filters apply to both totals and records. Dates use **UTC**, weeks start Monday, and custom end dates are inclusive. The activity list is paginated independently of the summary, so later pages do not reduce totals.
 
+Applications, completed interviews, and offers are the main cards. The chart compares applications and interviews side by side by default; choose **All activity** to include the other counts. Use the period selector or previous/next buttons to read exact values without hovering. Narrow screens and long ranges show a window around the selected period; the exact-values table includes the full range with **10/20/50 periods per page**. **More filters** contains company/type/work-arrangement options, with removable active filters and **Clear filters**. Custom date inputs appear when you select **Custom dates**.
+
+The interface uses 16px body, form, and table text with 14px supporting labels, larger controls, and stronger dark/light contrast. Tables scroll sideways within their own region on narrow screens. Opportunity details have section links and a prominent JD export section. My profile shows saved/unsaved state near the top and links back to its section navigation.
+
 To count an interview, open the opportunity and choose **Log completed interview**. Enter its round name, actual completion date, and optional notes. Each finished round counts separately. This does not change the opportunity's status. Incorrect interview records can be removed after confirmation. The manager can view interview records and progress reports but cannot log/remove another user's rounds.
 
 Migration 003 recovers existing saved-job and application dates. Earlier interview and outcome dates were not stored, so they are not inferred from the current status. Repeated status changes do not duplicate a job's milestones. Undoing Applied removes its application milestone; deleting a job removes its activity records. Filters use the job's current company and work arrangement. Counts describe retained records, not an archive of deleted jobs.
@@ -95,6 +99,8 @@ Migration 003 recovers existing saved-job and application dates. Earlier intervi
 ## Updating an existing production installation
 
 The profile/pagination update adds `002_profiles_and_page_size.sql`; the progress dashboard adds `003_activity_dashboard.sql`. The migration runner applies all pending files in order. These preserve existing users, jobs, resumes, sessions, profiles, and opportunity IDs. **Run `npm run db:migrate` before starting the updated application.** Keep your existing `.env` and database; do not initialize a fresh database or recreate the manager account.
+
+The readability/interface update introduces **no new database migration or environment variable**.
 
 Back up PostgreSQL, stop your app service, pull the reviewed changes, run `npm ci`, `npm run db:migrate`, and `npm run build`, then restart your normal service after all commands succeed. Docker Compose applies migrations at app startup. See [the VPS update guide](GITHUB_VPS_SETUP.md) for the full workflow. The export-folder update alone required no migration; the profile and pagination update does.
 

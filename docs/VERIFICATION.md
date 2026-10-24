@@ -2,6 +2,22 @@
 
 Date: 2026-10-21.
 
+## Readability and workflow update — 2026-10-24
+
+Implemented the first delivery from [the UI/UX research plan](UI_UX_RESEARCH.md): shared 16px body/forms/tables and 14px supporting labels, stronger theme colors, larger controls and focus indicators, responsive grouped activity bars, primary/secondary metric hierarchy, More filters and removable active filters, custom-date disclosure, and paginated exact values. The exact table has a page-sticky header synchronized with horizontal scrolling, readable numeric columns, and 10/20/50-row options. Opportunity details have section navigation and earlier JD export. Profiles show saved/unsaved state near the top, return links to sections, and a save bar that does not cover mobile fields. The mobile navigation supports Escape, focus containment/restoration, and excludes the closed drawer from keyboard focus.
+
+Validation passed locally:
+
+- **20 unit tests** and **127 API checks against the isolated PostgreSQL test database**, including owner isolation, manager read-only access, milestone/interview behavior, profile revisions, resumes, sessions, and deletion cascades.
+- Manager bootstrap/password-reset CLI checks, production build with TypeScript, a separate TypeScript check, publish-file review (**159 source files**), and Git whitespace checks.
+- The complete Microsoft Edge browser regression flow, including sign-in, job creation/application status, interview logging/removal, grouping and filters, profile save/reload/download, account-scoped remembered JD export folders, permission handling, 10/20/50 application pagination, and read-only manager views. No runtime page errors were observed.
+- New browser checks for computed HTML text sizes and contrast in both themes, chart colors and input boundaries, 44px dashboard controls, chart-label sizes at 1024/768/640/390/320px widths, keyboard period selection, emulated touch selection, and visible focus.
+- 125%, 150%, and 200% root text enlargement with reflow checks; a 320px profile with 200% text and unclipped wrapping buttons; opportunity section links below the sticky dialog header; mobile navigation focus containment/restoration; horizontally scrollable job tables operated by keyboard; exact-table pagination, page-sticky headings, and header/value alignment after horizontal scrolling.
+
+Representative desktop/mobile screenshots were inspected and are available under the ignored `outputs/qa/` directory. `activity-chart-desktop.png` provides a focused preview of the updated chart. The contrast checks evaluate computed text/solid background colors and defined graph/control colors; this is targeted verification, not a complete accessibility certification. Browser toolbar zoom, assistive technologies, other browsers, and the native Windows directory picker still need interactive review. Root text enlargement and narrow viewport tests do not claim to be actual toolbar zoom. Export regression checks use real browser filesystem handles with an injected picker, as in the previous release.
+
+No new dependency, environment variable, or database migration is required. Existing migrations and backend logic are unchanged. Verification was completed locally before publication; publishing the source to GitHub does not deploy it to the production VPS. Board view, follow-ups, saved views, archiving, and conversion funnels remain outside this delivery.
+
 ## Progress dashboard and completed interviews — 2026-10-21
 
 Added an owner-scoped progress dashboard with UTC daily/weekly/monthly grouping, date presets and inclusive custom ranges, company/activity/work-arrangement filters, six milestone totals, a chart, exact period values, and a paginated activity feed. Completed interview rounds are recorded manually by date and can be removed to correct mistakes. Retried submissions are idempotent. Saved/application/outcome milestones are recorded transactionally; repeated status changes cannot duplicate them. Undoing Applied removes its application milestone, and job/account deletion cascades to activity. Managers have read-only reports and interview views.
