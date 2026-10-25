@@ -1,7 +1,7 @@
 .master-profile{display:grid;gap:22px;max-width:1100px;min-width:0}
-.profile-intro{display:flex;align-items:flex-start;gap:18px;padding:25px;min-width:0}
+.profile-intro{display:flex;align-items:flex-start;gap:18px;padding:20px;min-width:0}
 .profile-intro>div{flex:1;min-width:0}.profile-intro h2{font-size:var(--text-section);line-height:1.4;font-weight:500}
-.profile-intro p,.profile-section p,.profile-workflow p{font-size:var(--text-body);line-height:1.8;color:var(--muted);margin-top:10px}
+.profile-intro p,.profile-section p,.profile-workflow p{font-size:var(--text-body);line-height:1.7;color:var(--muted);margin-top:8px}
 .profile-intro small{display:block;color:var(--accent);font-size:var(--text-body);margin-top:14px}
 .profile-section-links{display:flex;gap:8px;flex-wrap:wrap}.profile-section-links a{border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--muted);font-size:var(--text-body);line-height:1.5}
 .profile-section-links a:hover,.profile-section-links a:focus-visible{color:var(--accent);border-color:var(--accent)}

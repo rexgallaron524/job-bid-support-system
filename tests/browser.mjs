@@ -261,6 +261,33 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
   await page.screenshot({ path: fileURLToPath(new URL('workspace-mobile.png', output)), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
+  // Check every workspace view at the widths that exposed the reported clipping.
+  for (const width of [1366, 1024, 390, 320]) {
+    await page.setViewportSize({ width, height: 768 });
+    for (const view of ['Overview', 'Progress dashboard', 'All applications', 'Deadlines', 'My resumes', 'My profile', 'Settings']) {
+      if (width <= 900) await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
+      const sidebar = view === 'Settings' ? page.locator('.sidebar-bottom') : page.getByRole('navigation', { name: 'Main navigation' });
+      await sidebar.getByRole('button', { name: view, exact: view !== 'All applications' }).click();
+      await page.getByRole('heading', { name: view, exact: true }).waitFor();
+      if (view === 'Progress dashboard') await page.locator('.activity-metrics').waitFor();
+      if (view === 'My profile') await page.locator('.profile-intro').waitFor();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${view} must fit ${width}px viewport`);
+      if (width === 1366 && view === 'Overview') {
+        assert.ok(await page.locator('.table-scroll').evaluate(node => {
+          const action = node.querySelector('tbody tr td:last-child')?.getBoundingClientRect();
+          return action && action.right <= node.getBoundingClientRect().right + 1;
+        }), 'Overview actions must be visible without sideways scrolling at desktop width');
+      }
+      if (width === 1366 || width === 390) {
+        await page.screenshot({ path: fileURLToPath(new URL(`layout-${view.toLowerCase().replaceAll(' ', '-')}-${width}.png`, output)), animations: 'disabled' });
+      }
+    }
+    if (width > 900) {
+      await page.locator('.sidebar-content').evaluate(node => { node.scrollTop = node.scrollHeight; });
+      assert.ok(await page.locator('.brand').evaluate(node => node.getBoundingClientRect().top >= 0), 'Brand must stay visible when navigation scrolls');
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(base + '/review-manager-qa');
   await page.getByRole('heading', { name: 'People & progress' }).waitFor();
   await page.getByPlaceholder('Search name or email').fill('Sample applicant');

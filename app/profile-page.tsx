@@ -76,7 +76,7 @@ export default function ProfilePage({ name, email, onDirtyChange }: { name: stri
   return <form className="master-profile" onSubmit={save}>
     <section className="panel profile-intro">
       <span className="stat-icon purple"><UserRound size={22} /></span>
-      <div><h2>Your complete career story</h2><p>Enter information from LinkedIn and your full career history. Keep this master profile detailed, then use the relevant facts to tailor each resume.</p><p>Your profile is visible to you and the manager. Your resume contact email can differ from your sign-in email.</p><p className="profile-state" aria-live="polite">{dirty ? "Unsaved changes ? save your profile to keep your edits." : revision ? "All changes saved" : "Ready for your first save"}</p><small>{completed} of {PROFILE_SECTIONS.length} career sections filled</small></div>
+      <div><h2>Career profile</h2><p>Your profile is visible to you and the manager. Your resume contact email can differ from your sign-in email.</p><p className="profile-state" aria-live="polite">{dirty ? "Unsaved changes — save your profile to keep your edits." : revision ? "All changes saved" : "Ready for your first save"}</p><small>{completed} of {PROFILE_SECTIONS.length} career sections filled</small></div>
       <button className="btn" type="button" disabled={!revision || dirty || busy} onClick={download}><ArrowDownToLine size={15} />Download profile TXT</button>
     </section>
     <nav id="profile-sections" className="profile-section-links" aria-label="Profile sections"><a href="#profile-basics">Contact & headline</a>{PROFILE_SECTIONS.map(section => <a key={section.key} href={"#profile-" + section.key}>{section.label}</a>)}</nav>

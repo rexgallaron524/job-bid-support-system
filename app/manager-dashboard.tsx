@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, Eye, LoaderCircle, Moon, Sun, ShieldCheck, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Check, Eye, LoaderCircle, Moon, Sun, Trash2, Users } from "lucide-react";
 import type { Job } from "@/lib/domain";
 import SignOut from "./sign-out";
 import ActivityDashboard from "./activity-dashboard";
@@ -71,7 +71,7 @@ export default function ManagerDashboard({ initialTheme }: { initialTheme: strin
   }
   return <main className="manager-shell">
     <header className="manager-header"><a href="/" className="btn"><ArrowLeft size={15} />My workspace</a><div><button className="icon-button" onClick={toggleTheme} aria-label="Toggle theme"><Sun size={17} /><Moon size={17} /></button><SignOut /></div></header>
-    <section className="page-heading"><div><span className="eyebrow"><ShieldCheck size={14} /> MANAGER WORKSPACE</span><h1>People & progress</h1><p>Approve account requests and view application data. Application records are read-only here.</p></div><button className="btn" disabled={busy || loading} onClick={load}>Refresh users</button></section>
+    <section className="page-heading"><h1>People & progress</h1><button className="btn" disabled={busy || loading} onClick={load}>Refresh users</button></section>
     <div className="stat-grid manager-stats"><article className="stat-card"><span><Users size={16} /> Total accounts</span><strong>{accounts.length}</strong></article><article className="stat-card"><span>Waiting for approval</span><strong>{accounts.filter(a => a.status === "pending").length}</strong></article><article className="stat-card"><span>Approved accounts</span><strong>{accounts.filter(a => a.status === "approved").length}</strong></article></div>
     {error && <p className="error-banner" role="alert">{error}</p>}
     {deleting && <section className="panel delete-account"><h2>Delete {deleting.name}’s account?</h2><p>This permanently deletes this user, their master profile, jobs, descriptions, notes, resume files, and sessions from the live database. Local exports and previous backups remain.</p><label className="field-label">Type {deleting.email} to confirm<input autoFocus value={confirmation} onChange={e => setConfirmation(e.target.value)} /></label><div className="manager-actions"><button className="btn" disabled={busy} onClick={() => setDeleting(null)}>Cancel</button><button className="btn danger" disabled={busy || confirmation !== deleting.email} onClick={remove}><Trash2 size={15} />Delete user and all their data</button></div></section>}
